@@ -485,6 +485,118 @@ class ExtremeEdgeScenario:
 
         return state
 
+# -----------------------------------------------------
+# Level 6 - Chaotic Orbit Suppression Stress Scenario
+# -----------------------------------------------------
+
+class ChaoticOrbitScenario:
+    """
+    Level 6: Chaotic Orbit Suppression Stress.
+
+    This scenario applies a sequence of small and medium shocks
+    that mimic chaotic external excitation:
+
+      - Phase A (t = 3..15): high-frequency micro-shocks every 2 steps
+      - Phase B (t = 18, 19): quasi-resonance double shock
+      - Phase C (t = 25..35): low-frequency swaying every 3 steps
+      - Phase D (t = 40, 45): final asymmetric chaotic kicks
+
+    The FRE dynamics should contract these pseudo-chaotic orbits
+    back towards equilibrium without divergence or persistent oscillations.
+    """
+
+    def __init__(self) -> None:
+        self.applied_times: set[int] = set()
+
+    def _apply_if_needed(
+        self,
+        state: ExampleState5D,
+        t: int,
+        dm: float,
+        dL: float,
+        dH: float,
+        dR: float,
+        dC: float,
+    ) -> None:
+        if t in self.applied_times:
+            return
+        self.applied_times.add(t)
+
+        state.m += dm
+        state.L += dL
+        state.H += dH
+        state.R += dR
+        state.C += dC
+
+        state.compute_delta()
+        state.validate()
+
+    def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
+        # ------------------------------
+        # Phase A: high-frequency micro-shocks (t = 3,5,7,9,11,13,15)
+        # ------------------------------
+        if t == 3:
+            # small shift, slightly increasing asymmetry
+            self._apply_if_needed(state, t, dm=+0.02, dL=-0.01, dH=+0.01, dR=0.00, dC=-0.01)
+
+        if t == 5:
+            # reverse direction on some axes
+            self._apply_if_needed(state, t, dm=-0.03, dL=+0.02, dH=0.00, dR=+0.01, dC=+0.01)
+
+        if t == 7:
+            # another small perturbation with mixed signs
+            self._apply_if_needed(state, t, dm=+0.01, dL=+0.01, dH=-0.02, dR=-0.01, dC=+0.01)
+
+        if t == 9:
+            self._apply_if_needed(state, t, dm=-0.02, dL=-0.01, dH=+0.01, dR=+0.02, dC=-0.01)
+
+        if t == 11:
+            self._apply_if_needed(state, t, dm=+0.02, dL=-0.02, dH=+0.01, dR=-0.01, dC=+0.02)
+
+        if t == 13:
+            self._apply_if_needed(state, t, dm=-0.01, dL=+0.01, dH=-0.01, dR=+0.01, dC=-0.02)
+
+        if t == 15:
+            self._apply_if_needed(state, t, dm=+0.01, dL=+0.02, dH=0.00, dR=-0.02, dC=+0.01)
+
+        # ------------------------------
+        # Phase B: quasi-resonance double shock (t = 18, 19)
+        # ------------------------------
+        if t == 18:
+            # strong push in one direction
+            self._apply_if_needed(state, t, dm=+0.08, dL=+0.06, dH=-0.05, dR=+0.04, dC=-0.06)
+
+        if t == 19:
+            # almost mirrored correction in the opposite direction
+            self._apply_if_needed(state, t, dm=-0.06, dL=-0.05, dH=+0.04, dR=-0.03, dC=+0.05)
+
+        # ------------------------------
+        # Phase C: low-frequency swaying (t = 25, 28, 31, 34)
+        # ------------------------------
+        if t == 25:
+            self._apply_if_needed(state, t, dm=+0.05, dL=-0.03, dH=+0.02, dR=-0.02, dC=+0.03)
+
+        if t == 28:
+            self._apply_if_needed(state, t, dm=-0.04, dL=+0.04, dH=-0.03, dR=+0.03, dC=-0.02)
+
+        if t == 31:
+            self._apply_if_needed(state, t, dm=+0.03, dL=-0.02, dH=+0.02, dR=-0.02, dC=+0.02)
+
+        if t == 34:
+            self._apply_if_needed(state, t, dm=-0.02, dL=+0.03, dH=-0.02, dR=+0.02, dC=-0.02)
+
+        # ------------------------------
+        # Phase D: final chaotic kicks (t = 40, 45)
+        # ------------------------------
+        if t == 40:
+            self._apply_if_needed(state, t, dm=+0.07, dL=+0.02, dH=-0.04, dR=+0.03, dC=-0.05)
+
+        if t == 45:
+            self._apply_if_needed(state, t, dm=-0.05, dL=-0.03, dH=+0.03, dR=-0.02, dC=+0.04)
+
+        return state
+
+
 # ---------------------------------------------------------
 # Run example simulation
 # ---------------------------------------------------------
@@ -840,6 +952,89 @@ def main() -> None:
     if result_5.breach_occurred:
         print(f"  Step : {result_5.breach_step}")
         print(f"  Type : {result_5.breach_type}")
+
+    # -----------------------------------------------------
+    # Level 6 - Chaotic Orbit Suppression Stress (5D)
+    # -----------------------------------------------------
+    print("\n\nLevel 6 - Chaotic Orbit Suppression Stress (5D)")
+    print("================================================")
+    horizon_6 = 60
+
+    # Initial state for Level 6:
+    #   Δm = +0.06, ΔL = -0.04, ΔH = +0.03, ΔR = -0.02, ΔC = +0.05
+    initial_state_6 = ExampleState5D(
+        m=1.0 + 0.06,   # m_ref + Δm
+        L=1.0 - 0.04,   # L_ref + ΔL
+        H=1.0 + 0.03,   # H_ref + ΔH
+        R=1.0 - 0.02,   # R_ref + ΔR
+        C=1.0 + 0.05,   # C_ref + ΔC
+        m_ref=1.0,
+        L_ref=1.0,
+        H_ref=1.0,
+        R_ref=1.0,
+        C_ref=1.0,
+        delta=0.0,
+        fxi=1.0,
+    )
+
+    initial_state_6.compute_delta()
+    initial_state_6.validate()
+
+    scenario_6 = ChaoticOrbitScenario()
+
+    result_6: SimulationResult = run_simulation(
+        initial_state=initial_state_6,
+        operator=operator,      # same SimpleContractiveOperator(k=0.4)
+        scenario=scenario_6,
+        horizon=horizon_6,
+        config=None,
+    )
+
+    # ---- Scalar FXI/Delta summary for Level 6 ----
+    print(f"Horizon: {horizon_6} steps")
+    print(
+        f"Initial FXI: {result_6.fxi_series[0]:.4f}, "
+        f"Initial Delta: {result_6.delta_series[0]:.4f}"
+    )
+    print()
+
+    header_6 = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
+    print(header_6)
+    print("-" * len(header_6))
+
+    for t, (fxi, delta, kappa, zone) in enumerate(
+        zip(
+            result_6.fxi_series,
+            result_6.delta_series,
+            result_6.kappa_series,
+            result_6.stability_zones,
+        )
+    ):
+        kappa_str = f"{kappa:.4f}" if kappa is not None else "   n/a  "
+        print(f"{t:3d} | {fxi:8.4f} | {delta:8.4f} | {kappa_str:>8} | {zone}")
+
+    # ---- 5D deviation vector for Level 6 ----
+    print("\nDetailed 5D deviation components (Delta vector) Level 6:")
+    header_vec_6 = (
+        f"{'t':>3} | {'d_m':>8} | {'d_L':>8} | "
+        f"{'d_H':>8} | {'d_R':>8} | {'d_C':>8} | {'norm':>8}"
+    )
+    print(header_vec_6)
+    print("-" * len(header_vec_6))
+
+    for t, state in enumerate(result_6.state_series):
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+        norm_val = (d_m**2 + d_L**2 + d_H**2 + d_R**2 + d_C**2) ** 0.5
+        print(
+            f"{t:3d} | {d_m:8.4f} | {d_L:8.4f} | "
+            f"{d_H:8.4f} | {d_R:8.4f} | {d_C:8.4f} | {norm_val:8.4f}"
+        )
+
+    print()
+    print(f"Breach occurred (Level 6): {result_6.breach_occurred}")
+    if result_6.breach_occurred:
+        print(f"  Step : {result_6.breach_step}")
+        print(f"  Type : {result_6.breach_type}")
 
 
 if __name__ == "__main__":

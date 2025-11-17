@@ -10,6 +10,12 @@ Example FRE 2.0 simulation run (5D state version).
 import sys
 import os
 import math
+import sys
+import os
+import math
+import random  # <--- ДОБАВЬ ЭТУ СТРОКУ
+from dataclasses import dataclass, field
+from typing import List
 from dataclasses import dataclass, field
 from typing import List
 
@@ -895,10 +901,191 @@ class DomainDriftScenario:
 
         return state
 
+# -----------------------------------------------------
+# Level 10 - Stochastic Drift + Gaussian Shocks (5D)
+# -----------------------------------------------------
+
+class StochasticDriftScenario:
+    """
+    Level 10: Stochastic Drift + Gaussian Shocks (5D).
+
+    Идея:
+      - Reference-домен R⃗_ref(t) дрейфует по гладкой орбите, как в Level 9,
+        но поверх этого добавляется стохастический шум (Gaussian).
+      - Фактический X получает:
+          • частые мелкие "micro-shocks" (гауссов шум по осям),
+          • редкие "macro-shocks" (более сильные, но всё ещё в допустимой зоне),
+          • периодические лёгкие "twist"-повороты структуры (как медленное
+            вращение Q-матрицы).
+      - FRE должен:
+          • не развалиться под стохастикой,
+          • удерживать FXI в узкой полосе вокруг 1,
+          • не входить в резонанс / орбитальные циклы,
+          • не допустить breach по внутренним ограничениям.
+    """
+
+    def __init__(self) -> None:
+        # Гладкий дрейф reference-домена (как Level 9, но чуть мягче)
+        self.drift_amplitude = {
+            "m": 0.02,
+            "L": 0.018,
+            "H": 0.015,
+            "R": 0.02,
+            "C": 0.018,
+        }
+        self.period = 80.0  # медленный обход орбиты
+
+        # Стохастика в reference (domain noise)
+        self.ref_noise_sigma = {
+            "m": 0.004,
+            "L": 0.004,
+            "H": 0.003,
+            "R": 0.004,
+            "C": 0.003,
+        }
+
+        # Micro-shocks по X (мелкий структурный шум каждый шаг с вероятностью p)
+        self.micro_shock_sigma = {
+            "m": 0.004,
+            "L": 0.004,
+            "H": 0.003,
+            "R": 0.004,
+            "C": 0.003,
+        }
+        self.micro_shock_prob = 0.25  # 25% шагов получают мелкий шок
+
+        # Редкие macro-shocks (чуть сильнее, но всё ещё внутри допустимой области)
+        self.macro_shock_times = (30, 60, 90)
+        self.macro_shock_sigma = {
+            "m": 0.015,
+            "L": 0.015,
+            "H": 0.010,
+            "R": 0.015,
+            "C": 0.010,
+        }
+
+        # Лёгкий twist структуры (вращение отклонений между осями)
+        self.twist_scale = 0.02   # чуть мягче, чем в Level 9
+        self.twist_period = 25    # каждые 25 шагов лёгкий поворот
+
+    # ---------------------------
+    # Вспомогательные методы
+    # ---------------------------
+
+    def _smooth_reference(self, t: int) -> tuple[float, float, float, float, float]:
+        """
+        Гладкий базовый дрейф reference-вектора по синусоидальной орбите.
+        """
+        phi = 2.0 * math.pi * (t / self.period)
+
+        m_ref = 1.0 + self.drift_amplitude["m"] * math.sin(phi)
+        L_ref = 1.0 + self.drift_amplitude["L"] * math.sin(phi + math.pi / 3.0)
+        H_ref = 1.0 + self.drift_amplitude["H"] * math.sin(phi + 2.0 * math.pi / 3.0)
+        R_ref = 1.0 + self.drift_amplitude["R"] * math.sin(phi + math.pi)
+        C_ref = 1.0 + self.drift_amplitude["C"] * math.sin(phi + 4.0 * math.pi / 3.0)
+
+        return m_ref, L_ref, H_ref, R_ref, C_ref
+
+    def _apply_reference_update(self, state: ExampleState5D, t: int) -> None:
+        """
+        Обновляем reference-вектор:
+          • гладкий дрейф,
+          • плюс стохастический Gaussian-noise.
+        """
+        base_m, base_L, base_H, base_R, base_C = self._smooth_reference(t)
+
+        # Gaussian шум поверх гладкой орбиты
+        state.m_ref = base_m + random.gauss(0.0, self.ref_noise_sigma["m"])
+        state.L_ref = base_L + random.gauss(0.0, self.ref_noise_sigma["L"])
+        state.H_ref = base_H + random.gauss(0.0, self.ref_noise_sigma["H"])
+        state.R_ref = base_R + random.gauss(0.0, self.ref_noise_sigma["R"])
+        state.C_ref = base_C + random.gauss(0.0, self.ref_noise_sigma["C"])
+
+        state.compute_delta()
+        state.validate()
+
+    def _apply_micro_shock(self, state: ExampleState5D) -> None:
+        """
+        Мелкий шок по X (структура), Gaussian по каждой оси.
+        """
+        state.m += random.gauss(0.0, self.micro_shock_sigma["m"])
+        state.L += random.gauss(0.0, self.micro_shock_sigma["L"])
+        state.H += random.gauss(0.0, self.micro_shock_sigma["H"])
+        state.R += random.gauss(0.0, self.micro_shock_sigma["R"])
+        state.C += random.gauss(0.0, self.micro_shock_sigma["C"])
+
+        state.compute_delta()
+        state.validate()
+
+    def _apply_macro_shock(self, state: ExampleState5D) -> None:
+        """
+        Редкий, более сильный stochastic-шок по X.
+        """
+        state.m += random.gauss(0.0, self.macro_shock_sigma["m"])
+        state.L += random.gauss(0.0, self.macro_shock_sigma["L"])
+        state.H += random.gauss(0.0, self.macro_shock_sigma["H"])
+        state.R += random.gauss(0.0, self.macro_shock_sigma["R"])
+        state.C += random.gauss(0.0, self.macro_shock_sigma["C"])
+
+        state.compute_delta()
+        state.validate()
+
+    def _apply_twist(self, state: ExampleState5D) -> None:
+        """
+        Лёгкий структурный twist: перемешивание компонет Δ⃗.
+        """
+        # гарантируем актуальный Δ⃗
+        state.compute_delta()
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+
+        state.m += self.twist_scale * (d_L - d_m)
+        state.L += self.twist_scale * (d_H - d_L)
+        state.H += self.twist_scale * (d_R - d_H)
+        state.R += self.twist_scale * (d_C - d_R)
+        state.C += self.twist_scale * (d_m - d_C)
+
+        state.compute_delta()
+        state.validate()
+
+    # ---------------------------
+    # Основной интерфейс сценария
+    # ---------------------------
+
+    def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
+        """
+        Engine вызывает:
+            state = scenario.apply(state, t)
+
+        Порядок:
+          1) Дрейф + шум reference-домена.
+          2) С вероятностью p — micro-shock по X.
+          3) В редкие времена — macro-shock по X.
+          4) Каждые twist_period шагов — лёгкий twist структуры.
+
+        Важно:
+          - Сценарий не ломает непрерывность FXI,
+          - Всё остаётся в рамках FRE-констракции с contraction-оператором.
+        """
+        # 1) Всегда обновляем reference-домен (drift + Gaussian noise)
+        self._apply_reference_update(state, t)
+
+        # 2) Micro-shock по X с вероятностью p
+        if random.random() < self.micro_shock_prob:
+            self._apply_micro_shock(state)
+
+        # 3) Редкие macro-shocks в заранее заданные моменты
+        if t in self.macro_shock_times:
+            self._apply_macro_shock(state)
+
+        # 4) Периодический twist структуры
+        if t > 0 and (t % self.twist_period == 0):
+            self._apply_twist(state)
+
+        return state
+
 # ---------------------------------------------------------
 # Run example simulation
 # ---------------------------------------------------------
-
 
 def main() -> None:
     # Initial 5D structural state:
@@ -1582,6 +1769,89 @@ def main() -> None:
     if result_9.breach_occurred:
         print(f"  Step : {result_9.breach_step}")
         print(f"  Type : {result_9.breach_type}")
+
+    # -----------------------------------------------------
+    # Level 10 — Stochastic Drift + Gaussian Chaos (5D)
+    # -----------------------------------------------------
+    print("\n\nLevel 10 — Stochastic Drift + Gaussian Chaos (5D)")
+    print("====================================================")
+    horizon_10 = 150
+
+    # Initial state for Level 10:
+    #   Лёгкая асимметрия, всё в допустимой зоне.
+    initial_state_10 = ExampleState5D(
+        m=1.0 + 0.04,
+        L=1.0 - 0.03,
+        H=1.0 + 0.02,
+        R=1.0 - 0.01,
+        C=1.0 + 0.03,
+        m_ref=1.0,
+        L_ref=1.0,
+        H_ref=1.0,
+        R_ref=1.0,
+        C_ref=1.0,
+        delta=0.0,
+        fxi=1.0,
+    )
+
+    initial_state_10.compute_delta()
+    initial_state_10.validate()
+
+    scenario_10 = StochasticDriftScenario()
+
+    result_10: SimulationResult = run_simulation(
+        initial_state=initial_state_10,
+        operator=operator,      # SimpleContractiveOperator(k=0.4)
+        scenario=scenario_10,
+        horizon=horizon_10,
+        config=None,
+    )
+
+    # ---- Scalar FXI/Delta summary for Level 10 ----
+    print(f"Horizon: {horizon_10} steps")
+    print(
+        f"Initial FXI: {result_10.fxi_series[0]:.4f}, "
+        f"Initial Delta: {result_10.delta_series[0]:.4f}"
+    )
+    print()
+
+    header_10 = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
+    print(header_10)
+    print("-" * len(header_10))
+
+    for t, (fxi, delta, kappa, zone) in enumerate(
+        zip(
+            result_10.fxi_series,
+            result_10.delta_series,
+            result_10.kappa_series,
+            result_10.stability_zones,
+        )
+    ):
+        kappa_str = f"{kappa:.4f}" if kappa is not None else "   n/a   "
+        print(f"{t:3d} | {fxi:8.4f} | {delta:8.4f} | {kappa_str:>8} | {zone}")
+
+    # ---- Detailed 5D deviation vector for Level 10 ----
+    print("\nDetailed 5D deviation components (Delta vector) — Level 10:")
+    header_vec_10 = (
+        f"{'t':>3} | {'d_m':>8} | {'d_L':>8} | "
+        f"{'d_H':>8} | {'d_R':>8} | {'d_C':>8} | {'norm':>8}"
+    )
+    print(header_vec_10)
+    print("-" * len(header_vec_10))
+
+    for t, state in enumerate(result_10.state_series):
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+        norm_val = (d_m**2 + d_L**2 + d_H**2 + d_R**2 + d_C**2) ** 0.5
+        print(
+            f"{t:3d} | {d_m:8.4f} | {d_L:8.4f} | "
+            f"{d_H:8.4f} | {d_R:8.4f} | {d_C:8.4f} | {norm_val:8.4f}"
+        )
+
+    print()
+    print(f"Breach occurred (Level 10): {result_10.breach_occurred}")
+    if result_10.breach_occurred:
+        print(f"  Step : {result_10.breach_step}")
+        print(f"  Type : {result_10.breach_type}")
 
 if __name__ == "__main__":
     main()

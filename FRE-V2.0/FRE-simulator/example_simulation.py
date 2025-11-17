@@ -1,15 +1,17 @@
 """
-Example FRE 2.0 simulation run.
+Example FRE 2.0 simulation run (5D state version).
 
 - Automatically adds ./src to sys.path
 - Uses fre_simulator.engine.run_simulation
-- Defines a minimal ExampleState, Operator and Scenario for demonstration
-- Does NOT modify or depend on internal State implementation from fre_simulator.state
+- Defines a 5D ExampleState5D with vector deviation Δ = (Δm, ΔL, ΔH, ΔR, ΔC)
+- Keeps scalar FXI and scalar delta = ||Δ|| for compatibility with the engine
 """
 
 import sys
 import os
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
+from typing import List
 
 # ---------------------------------------------------------
 # 1. Add ./src to sys.path so that `import fre_simulator` works
@@ -26,66 +28,153 @@ from fre_simulator.engine import run_simulation, SimulationResult  # type: ignor
 
 
 # ---------------------------------------------------------
-# 2. Minimal example state compatible with engine.run_simulation
+# 2. 5D ExampleState compatible with fre_simulator.engine.run_simulation
 # ---------------------------------------------------------
 
 
 @dataclass
-class ExampleState:
+class ExampleState5D:
     """
-    Minimal stand-alone state object that is compatible with fre_simulator.engine.run_simulation.
+    5D structural state for FRE 2.0 demo.
 
-    The engine uses:
-      - instance attrs:  fxi, delta
-      - class attrs:     DELTA_MAX, FXI_MIN, FXI_MAX
-      - methods:         validate(), compute_delta(), update_from_operator(new_fxi)
+    Internal structural components:
+        m, L, H, R, C      — actual structural configuration
+        m_ref, ... ,C_ref  — reference (equilibrium) configuration
+
+    Deviation:
+        delta_vec = [Δm, ΔL, ΔH, ΔR, ΔC]
+        delta     = ||delta_vec||_2   (scalar, used by engine)
+
+    FXI:
+        fxi = F(delta) = 1 + alpha * delta
+
+    Engine expectations:
+      - attributes: fxi, delta
+      - class attrs: DELTA_MAX, FXI_MIN, FXI_MAX
+      - methods:     validate(), compute_delta(), update_from_operator(new_fxi)
     """
 
-    qp: float      # synthetic mass (примерная структура)
-    qf: float      # reference mass
-    delta: float   # structural deviation Δ = qp - qf
-    fxi: float     # FXI indicator
+    # Actual structural values
+    m: float
+    L: float
+    H: float
+    R: float
+    C: float
 
-    # Capacity limits (used as defaults by engine)
-    DELTA_MAX: float = 1.0
-    FXI_MIN: float = 0.5
-    FXI_MAX: float = 1.5
+    # Reference (target) values
+    m_ref: float
+    L_ref: float
+    H_ref: float
+    R_ref: float
+    C_ref: float
 
-    def validate(self) -> None:
-        """
-        Simple sanity checks; in реальном проекте тут могут быть более строгие ограничения.
-        """
-        if not (self.FXI_MIN <= self.fxi <= self.FXI_MAX):
-            raise ValueError(f"FXI out of bounds: {self.fxi}")
-        if abs(self.delta) > self.DELTA_MAX * 2:
-            # оставим запас, чтобы пример не падал слишком агрессивно
-            raise ValueError(f"Delta too large: {self.delta}")
+    # Derived quantities
+    delta: float          # scalar norm ||Δ||
+    fxi: float            # FXI indicator
+
+    # Full deviation vector Δ⃗
+    delta_vec: List[float] = field(default_factory=list)
+
+    # Structural bounds
+    DELTA_MAX: float = 1.0     # max allowed norm of Δ
+    FXI_MIN: float = 0.5       # min allowed FXI
+    FXI_MAX: float = 1.5       # max allowed FXI
+
+    # Mapping parameter FXI = 1 + alpha * ||Δ||
+    ALPHA: float = 0.5
+
+    # -------------------------------------------------
+    # Core methods required by the engine
+    # -------------------------------------------------
+
+    def _compute_delta_vector(self) -> None:
+        """Compute component-wise deviation Δ⃗ = X - X_ref."""
+        d_m = self.m - self.m_ref
+        d_L = self.L - self.L_ref
+        d_H = self.H - self.H_ref
+        d_R = self.R - self.R_ref
+        d_C = self.C - self.C_ref
+        self.delta_vec = [d_m, d_L, d_H, d_R, d_C]
 
     def compute_delta(self) -> None:
         """
-        Recompute delta from qp and qf.
+        Recompute Δ⃗ and scalar delta = ||Δ⃗||.
 
-        Engine calls this each step:
+        Engine calls this method each step:
             state.compute_delta()
         """
-        self.delta = self.qp - self.qf
+        self._compute_delta_vector()
+        self.delta = math.sqrt(sum(d * d for d in self.delta_vec))
+
+        # Update FXI from delta using simple linear map.
+        # FXI > 1  => expanded
+        # FXI = 1  => equilibrium
+        # FXI < 1  => compressed (в этом демо мы стартуем только > 1).
+        self.fxi = 1.0 + self.ALPHA * self.delta
+
+    def validate(self) -> None:
+        """
+        Simple structural sanity checks.
+
+        In real systems здесь можно зашить реальные лимиты:
+        минимальные маржи, капитальные буферы и т.д.
+        """
+        if self.delta > self.DELTA_MAX * 2:
+            raise ValueError(f"Delta norm too large: {self.delta}")
+
+        if not (self.FXI_MIN <= self.fxi <= self.FXI_MAX):
+            raise ValueError(f"FXI out of bounds: {self.fxi}")
 
     def update_from_operator(self, new_fxi: float) -> None:
         """
-        Update state from operator result.
+        Update state from operator result (E in FXI-space).
 
         Engine calls:
             state.update_from_operator(next_fxi)
 
-        Здесь мы делаем простую игрушечную связь:
-            - FXI -> ближе к 1.0
-            - Delta привязываем к FXI: чем ближе FXI к 1, тем ближе delta к 0.
+        Логика:
+          1) принимаем новый FXI,
+          2) через обратную связь F^{-1} восстанавливаем новую норму Δ,
+          3) масштабируем вектор Δ⃗ вдоль текущего направления,
+             чтобы ||Δ⃗|| = delta_new,
+          4) получаем новые m, L, H, R, C = ref + Δ⃗_new,
+          5) пересчитываем delta и fxi для консистентности.
         """
         self.fxi = new_fxi
 
-        # Простое линейное соответствие: delta ~ (FXI - 1)
-        # Чтобы не вылезать за DELTA_MAX, нормируем.
-        self.qp = self.qf + (self.fxi - 1.0) * self.DELTA_MAX
+        # Если F(delta) = 1 + ALPHA * delta => delta = (fxi - 1) / ALPHA
+        delta_new = abs((self.fxi - 1.0) / self.ALPHA)
+
+        # Если текущая delta == 0, то мы уже в точном равновесии:
+        # просто оставляем всё на уровне референса.
+        if self.delta == 0:
+            self.m = self.m_ref
+            self.L = self.L_ref
+            self.H = self.H_ref
+            self.R = self.R_ref
+            self.C = self.C_ref
+            self.compute_delta()
+            return
+
+        # Масштабируем вектор Δ⃗ на новую норму
+        scale = delta_new / self.delta
+        self._compute_delta_vector()
+        d_m, d_L, d_H, d_R, d_C = self.delta_vec
+
+        d_m_new = d_m * scale
+        d_L_new = d_L * scale
+        d_H_new = d_H * scale
+        d_R_new = d_R * scale
+        d_C_new = d_C * scale
+
+        # Восстанавливаем структурные компоненты
+        self.m = self.m_ref + d_m_new
+        self.L = self.L_ref + d_L_new
+        self.H = self.H_ref + d_H_new
+        self.R = self.R_ref + d_R_new
+        self.C = self.C_ref + d_C_new
+
+        # Финальный перерасчёт delta и fxi для консистентности
         self.compute_delta()
 
 
@@ -96,11 +185,12 @@ class ExampleState:
 
 class SimpleContractiveOperator:
     """
-    Very simple contractive operator:
+    Very simple contractive operator in FXI-space:
 
         FXI_{t+1} = 1 + k * (FXI_t - 1),  0 < k < 1
 
-    Это даёт геометрическую сходимость FXI -> 1.
+    Это даёт геометрическую сходимость FXI -> 1,
+    а через update_from_operator это превращается в сходимость ||Δ⃗|| -> 0.
     """
 
     def __init__(self, k: float = 0.4) -> None:
@@ -136,12 +226,16 @@ class NoShockScenario:
 
     Engine calls:
         state = scenario.apply(state, t)
+
+    Здесь можно будет позже добавить сдвиги по компонентам,
+    чтобы моделировать stress-сценарии (ликвидность, маржа и т.д.).
     """
 
-    def apply(self, state: ExampleState, t: int) -> ExampleState:
-        # Можно добавить стресс, например:
+    def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
+        # Пример того, как можно будет добавить стресс:
         # if t == 5:
-        #     state.qp += 0.2
+        #     state.m += 0.2
+        #     state.L -= 0.1
         #     state.compute_delta()
         return state
 
@@ -152,13 +246,37 @@ class NoShockScenario:
 
 
 def main() -> None:
-    # Initial structural state: небольшой перекос и FXI > 1
-    initial_state = ExampleState(
-        qp=1.2,      # actual structural mass
-        qf=1.0,      # reference mass
-        delta=0.2,   # qp - qf
-        fxi=1.15,    # slightly expanded state
+    # Initial 5D structural state:
+    #
+    # Reference configuration:
+    #   m_ref = L_ref = H_ref = R_ref = C_ref = 1.0
+    #
+    # Actual configuration — немного смещена по всем осям:
+    #   m = 1.10 (margin)
+    #   L = 0.90 (limits/exposure)
+    #   H = 1.05 (hedging/liquidity)
+    #   R = 1.20 (risk-parameters)
+    #   C = 0.95 (capital buffers)
+    #
+    # Это даёт ненулевой вектор Δ⃗ и FXI > 1 (расширенное состояние).
+    initial_state = ExampleState5D(
+        m=1.10,
+        L=0.90,
+        H=1.05,
+        R=1.20,
+        C=0.95,
+        m_ref=1.0,
+        L_ref=1.0,
+        H_ref=1.0,
+        R_ref=1.0,
+        C_ref=1.0,
+        delta=0.0,   # заполним в compute_delta()
+        fxi=1.0,     # заполним в compute_delta()
     )
+
+    # Начальный пересчёт Δ⃗ и FXI
+    initial_state.compute_delta()
+    initial_state.validate()
 
     operator = SimpleContractiveOperator(k=0.4)
     scenario = NoShockScenario()
@@ -174,8 +292,8 @@ def main() -> None:
     )
 
     # ---- Output ----
-    print("FRE 2.0 Example Simulation")
-    print("==========================")
+    print("FRE 2.0 Example Simulation (5D)")
+    print("================================")
     print(f"Horizon: {horizon} steps")
     print(
         f"Initial FXI: {result.fxi_series[0]:.4f}, "

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+
+# Build artifacts
+*.egg-info/
+
+# pytest
+.pytest_cache/
+
+# LaTeX build files
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.toc
+*.synctex.gz
+*.out
+*.pdf
+
+# VSCode / IDE
+.vscode/
+.idea/

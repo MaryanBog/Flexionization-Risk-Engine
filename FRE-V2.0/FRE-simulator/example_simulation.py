@@ -596,6 +596,128 @@ class ChaoticOrbitScenario:
 
         return state
 
+# -----------------------------------------------------
+# Level 7 - Multi-Frequency Resonance Stress Scenario
+# -----------------------------------------------------
+
+class ResonanceScenario:
+    """
+    Level 7: Multi-Frequency Resonance Stress.
+
+    Three overlapping frequency bands:
+      - Low-frequency (LF):   period ~20, medium shocks (t = 10, 30, 50, 70, 90, 110)
+      - Mid-frequency (MF):   period ~8,  small/medium shocks (t = 8,16,24,...)
+      - High-frequency (HF):  period ~3,  micro-shocks (t = 3,6,9,...)
+
+    The goal is to test whether FRE remains resonance-resistant
+    under multi-frequency excitation and does not lock into
+    persistent oscillations or diverging orbits.
+    """
+
+    def __init__(self) -> None:
+        pass
+
+    def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
+        dm = 0.0
+        dL = 0.0
+        dH = 0.0
+        dR = 0.0
+        dC = 0.0
+
+        # ------------------------------
+        # Low-frequency wave (LF): period ~20
+        # t = 10, 30, 50, 70, 90, 110
+        # amplitude ~0.05 - 0.08 with alternating signs
+        # ------------------------------
+        if t in (10, 30, 50, 70, 90, 110):
+            lf_index = (t - 10) // 20  # 0..5
+
+            lf_patterns = [
+                # dm,   dL,    dH,    dR,    dC
+                ( +0.05, -0.04, +0.03, -0.02, +0.05),  # t=10
+                ( -0.06, +0.05, -0.04, +0.03, -0.06),  # t=30
+                ( +0.07, +0.02, -0.05, -0.03, +0.04),  # t=50
+                ( -0.05, -0.04, +0.04, +0.02, -0.05),  # t=70
+                ( +0.06, -0.03, +0.03, -0.04, +0.06),  # t=90
+                ( -0.07, +0.04, -0.03, +0.03, -0.04),  # t=110
+            ]
+
+            lf_dm, lf_dL, lf_dH, lf_dR, lf_dC = lf_patterns[lf_index]
+            dm += lf_dm
+            dL += lf_dL
+            dH += lf_dH
+            dR += lf_dR
+            dC += lf_dC
+
+        # ------------------------------
+        # Mid-frequency wave (MF): period ~8
+        # t = 8,16,24,32,40,48,56,64,72,80,88,96,104,112
+        # amplitude ~0.01 - 0.03
+        # ------------------------------
+        if 8 <= t <= 112 and (t - 8) % 8 == 0:
+            mf_index = (t - 8) // 8  # 0..
+
+            mf_patterns = [
+                (+0.02, -0.01, +0.01, +0.00, -0.02),  # 8
+                (-0.03, +0.02, -0.01, -0.01, +0.02),  # 16
+                (+0.01, +0.01, -0.02, +0.02, -0.01),  # 24
+                (-0.02, -0.01, +0.01, +0.02, +0.00),  # 32
+                (+0.03, -0.02, +0.00, -0.02, +0.02),  # 40
+                (-0.02, +0.01, -0.02, +0.01, -0.02),  # 48
+                (+0.01, +0.02, -0.01, -0.02, +0.01),  # 56
+                (-0.03, -0.01, +0.02, +0.01, -0.01),  # 64
+                (+0.02, -0.01, +0.01, -0.01, +0.02),  # 72
+                (-0.01, +0.02, -0.02, +0.02, -0.02),  # 80
+                (+0.02, +0.01, -0.01, -0.01, +0.01),  # 88
+                (-0.02, -0.02, +0.02, +0.01, -0.01),  # 96
+                (+0.03, +0.00, -0.02, -0.02, +0.02),  # 104
+                (-0.02, +0.01, +0.00, +0.02, -0.02),  # 112
+            ]
+
+            mf_index = min(mf_index, len(mf_patterns) - 1)
+            mf_dm, mf_dL, mf_dH, mf_dR, mf_dC = mf_patterns[mf_index]
+            dm += mf_dm
+            dL += mf_dL
+            dH += mf_dH
+            dR += mf_dR
+            dC += mf_dC
+
+        # ------------------------------
+        # High-frequency wave (HF): period ~3
+        # t = 3,6,9,...,117
+        # amplitude ~0.003 - 0.01
+        # ------------------------------
+        if 3 <= t <= 117 and (t - 3) % 3 == 0:
+            hf_index = (t - 3) // 3
+
+            hf_patterns = [
+                (+0.005, -0.003, +0.002, -0.002, +0.004),  # base
+                (-0.004, +0.004, -0.003, +0.002, -0.003),
+                (+0.006, +0.002, -0.002, +0.003, -0.004),
+                (-0.005, -0.002, +0.002, -0.003, +0.003),
+            ]
+            # cycle through patterns
+            hf_dm, hf_dL, hf_dH, hf_dR, hf_dC = hf_patterns[hf_index % len(hf_patterns)]
+            dm += hf_dm
+            dL += hf_dL
+            dH += hf_dH
+            dR += hf_dR
+            dC += hf_dC
+
+        # ------------------------------
+        # Apply combined shock if any
+        # ------------------------------
+        if dm != 0.0 or dL != 0.0 or dH != 0.0 or dR != 0.0 or dC != 0.0:
+            state.m += dm
+            state.L += dL
+            state.H += dH
+            state.R += dR
+            state.C += dC
+
+            state.compute_delta()
+            state.validate()
+
+        return state
 
 # ---------------------------------------------------------
 # Run example simulation
@@ -1036,6 +1158,88 @@ def main() -> None:
         print(f"  Step : {result_6.breach_step}")
         print(f"  Type : {result_6.breach_type}")
 
+    # -----------------------------------------------------
+    # Level 7 - Multi-Frequency Resonance Stress (5D)
+    # -----------------------------------------------------
+    print("\n\nLevel 7 - Multi-Frequency Resonance Stress (5D)")
+    print("================================================")
+    horizon_7 = 120
+
+    # Initial state for Level 7:
+    #   Δm = +0.03, ΔL = +0.02, ΔH = -0.02, ΔR = +0.01, ΔC = -0.03
+    initial_state_7 = ExampleState5D(
+        m=1.0 + 0.03,   # m_ref + Δm
+        L=1.0 + 0.02,   # L_ref + ΔL
+        H=1.0 - 0.02,   # H_ref + ΔH
+        R=1.0 + 0.01,   # R_ref + ΔR
+        C=1.0 - 0.03,   # C_ref + ΔC
+        m_ref=1.0,
+        L_ref=1.0,
+        H_ref=1.0,
+        R_ref=1.0,
+        C_ref=1.0,
+        delta=0.0,
+        fxi=1.0,
+    )
+
+    initial_state_7.compute_delta()
+    initial_state_7.validate()
+
+    scenario_7 = ResonanceScenario()
+
+    result_7: SimulationResult = run_simulation(
+        initial_state=initial_state_7,
+        operator=operator,      # same SimpleContractiveOperator(k=0.4)
+        scenario=scenario_7,
+        horizon=horizon_7,
+        config=None,
+    )
+
+    # ---- Scalar FXI/Delta summary for Level 7 ----
+    print(f"Horizon: {horizon_7} steps")
+    print(
+        f"Initial FXI: {result_7.fxi_series[0]:.4f}, "
+        f"Initial Delta: {result_7.delta_series[0]:.4f}"
+    )
+    print()
+
+    header_7 = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
+    print(header_7)
+    print("-" * len(header_7))
+
+    for t, (fxi, delta, kappa, zone) in enumerate(
+        zip(
+            result_7.fxi_series,
+            result_7.delta_series,
+            result_7.kappa_series,
+            result_7.stability_zones,
+        )
+    ):
+        kappa_str = f"{kappa:.4f}" if kappa is not None else "   n/a   "
+        print(f"{t:3d} | {fxi:8.4f} | {delta:8.4f} | {kappa_str:>8} | {zone}")
+
+    # ---- 5D deviation vector for Level 7 ----
+    print("\nDetailed 5D deviation components (Delta vector) Level 7:")
+    header_vec_7 = (
+        f"{'t':>3} | {'d_m':>8} | {'d_L':>8} | "
+        f"{'d_H':>8} | {'d_R':>8} | {'d_C':>8} | {'norm':>8}"
+    )
+    print(header_vec_7)
+    print("-" * len(header_vec_7))
+
+    for t, state in enumerate(result_7.state_series):
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+        norm_val = (d_m**2 + d_L**2 + d_H**2 + d_R**2 + d_C**2) ** 0.5
+        print(
+            f"{t:3d} | {d_m:8.4f} | {d_L:8.4f} | "
+            f"{d_H:8.4f} | {d_R:8.4f} | {d_C:8.4f} | {norm_val:8.4f}"
+        )
+
+    print()
+    print(f"Breach occurred (Level 7): {result_7.breach_occurred}")
+    if result_7.breach_occurred:
+        print(f"  Step : {result_7.breach_step}")
+        print(f"  Type : {result_7.breach_type}")
 
 if __name__ == "__main__":
     main()

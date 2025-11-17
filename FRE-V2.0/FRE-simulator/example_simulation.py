@@ -35,7 +35,7 @@ from fre_simulator.engine import run_simulation, SimulationResult  # type: ignor
 @dataclass
 class ExampleState5D:
     """
-    5D structural state for FRE 2.0 demo.
+    5D structural state for FRE 2.0 demo (with vector operator E).
 
     Internal structural components:
         m, L, H, R, C      — actual structural configuration
@@ -52,6 +52,11 @@ class ExampleState5D:
       - attributes: fxi, delta
       - class attrs: DELTA_MAX, FXI_MIN, FXI_MAX
       - methods:     validate(), compute_delta(), update_from_operator(new_fxi)
+
+    ВАЖНО: на LEVEL 2 мы вводим настоящий векторный оператор:
+        Δ_{t+1} = k_eff * Q * Δ_t,
+    где Q — ортогональная матрица (перестановка компонент),
+    k_eff — фактический коэффициент сжатия, вычисленный по FXI.
     """
 
     # Actual structural values
@@ -80,7 +85,7 @@ class ExampleState5D:
     FXI_MIN: float = 0.5       # min allowed FXI
     FXI_MAX: float = 1.5       # max allowed FXI
 
-    # Mapping parameter FXI = 1 + alpha * ||Δ||
+    # Mapping parameter FXI = 1 + ALPHA * ||Δ||
     ALPHA: float = 0.5
 
     # -------------------------------------------------
@@ -106,18 +111,12 @@ class ExampleState5D:
         self._compute_delta_vector()
         self.delta = math.sqrt(sum(d * d for d in self.delta_vec))
 
-        # Update FXI from delta using simple linear map.
-        # FXI > 1  => expanded
-        # FXI = 1  => equilibrium
-        # FXI < 1  => compressed (в этом демо мы стартуем только > 1).
+        # FXI = 1 + alpha * ||Δ||
         self.fxi = 1.0 + self.ALPHA * self.delta
 
     def validate(self) -> None:
         """
         Simple structural sanity checks.
-
-        In real systems здесь можно зашить реальные лимиты:
-        минимальные маржи, капитальные буферы и т.д.
         """
         if self.delta > self.DELTA_MAX * 2:
             raise ValueError(f"Delta norm too large: {self.delta}")
@@ -125,29 +124,42 @@ class ExampleState5D:
         if not (self.FXI_MIN <= self.fxi <= self.FXI_MAX):
             raise ValueError(f"FXI out of bounds: {self.fxi}")
 
+    def _apply_Q(self, vec: List[float]) -> List[float]:
+        """
+        Apply orthogonal matrix Q to Δ⃗.
+
+        Здесь Q — просто перестановка компонент:
+            Q * (Δm, ΔL, ΔH, ΔR, ΔC)
+              = (ΔL, Δm, ΔH, ΔC, ΔR)
+
+        Такая матрица ортогональна (норма сохраняется),
+        но создаёт взаимодействие между осями.
+        """
+        d_m, d_L, d_H, d_R, d_C = vec
+        return [d_L, d_m, d_H, d_C, d_R]
+
     def update_from_operator(self, new_fxi: float) -> None:
         """
-        Update state from operator result (E in FXI-space).
+        Update state from operator result (vector E in Δ-space).
 
         Engine calls:
             state.update_from_operator(next_fxi)
 
         Логика:
-          1) принимаем новый FXI,
-          2) через обратную связь F^{-1} восстанавливаем новую норму Δ,
-          3) масштабируем вектор Δ⃗ вдоль текущего направления,
-             чтобы ||Δ⃗|| = delta_new,
-          4) получаем новые m, L, H, R, C = ref + Δ⃗_new,
-          5) пересчитываем delta и fxi для консистентности.
+          1) prev_fxi = текущий FXI(t)
+          2) k_eff = |(FXI_{t+1} - 1) / (FXI_t - 1)| — фактическая контракция
+          3) Δ⃗_t берём из текущего состояния
+          4) Δ⃗'_t = Q * Δ⃗_t — поворот / перестановка координат
+          5) Δ⃗_{t+1} = k_eff * Δ⃗'_t
+          6) обновляем m, L, H, R, C = ref + Δ⃗_{t+1}
+          7) пересчитываем delta и fxi => FXI снова согласован с нормой Δ⃗.
         """
-        self.fxi = new_fxi
+        prev_fxi = self.fxi
+        self._compute_delta_vector()
 
-        # Если F(delta) = 1 + ALPHA * delta => delta = (fxi - 1) / ALPHA
-        delta_new = abs((self.fxi - 1.0) / self.ALPHA)
-
-        # Если текущая delta == 0, то мы уже в точном равновесии:
-        # просто оставляем всё на уровне референса.
-        if self.delta == 0:
+        # Если мы уже в точном равновесии (FXI=1, Δ⃗=0),
+        # просто остаёмся в точке X*.
+        if self.delta == 0 or abs(prev_fxi - 1.0) < 1e-12:
             self.m = self.m_ref
             self.L = self.L_ref
             self.H = self.H_ref
@@ -156,27 +168,24 @@ class ExampleState5D:
             self.compute_delta()
             return
 
-        # Масштабируем вектор Δ⃗ на новую норму
-        scale = delta_new / self.delta
-        self._compute_delta_vector()
-        d_m, d_L, d_H, d_R, d_C = self.delta_vec
+        # Коэффициент сжатия, реально заданный оператором E в FXI-пространстве
+        k_eff = abs((new_fxi - 1.0) / (prev_fxi - 1.0))
 
-        d_m_new = d_m * scale
-        d_L_new = d_L * scale
-        d_H_new = d_H * scale
-        d_R_new = d_R * scale
-        d_C_new = d_C * scale
+        # Применяем матрицу Q (перемешиваем оси)
+        rotated = self._apply_Q(self.delta_vec)
 
-        # Восстанавливаем структурные компоненты
-        self.m = self.m_ref + d_m_new
-        self.L = self.L_ref + d_L_new
-        self.H = self.H_ref + d_H_new
-        self.R = self.R_ref + d_R_new
-        self.C = self.C_ref + d_C_new
+        # Вектор после контракции
+        new_delta_vec = [k_eff * d for d in rotated]
 
-        # Финальный перерасчёт delta и fxi для консистентности
+        # Обновляем структурные компоненты
+        self.m = self.m_ref + new_delta_vec[0]
+        self.L = self.L_ref + new_delta_vec[1]
+        self.H = self.H_ref + new_delta_vec[2]
+        self.R = self.R_ref + new_delta_vec[3]
+        self.C = self.C_ref + new_delta_vec[4]
+
+        # Финальный перерасчёт delta и fxi для строгой консистентности
         self.compute_delta()
-
 
 # ---------------------------------------------------------
 # 3. Simple contractive operator E and trivial scenario
@@ -219,24 +228,82 @@ class SimpleContractiveOperator:
             return 0.0
         return new_dist / prev_dist
 
+# ============================================================
+#  STRESS TEST 1 — Multi-Component Structural Shock (t = 5)
+#
+#  This scenario introduces a single strong structural disturbance
+#  at step t = 5, affecting three different internal axes of the
+#  5-dimensional state:
+#
+#      • L  (Exposure / Liquidity axis)   →   L -= 0.30
+#      • R  (Risk parameters axis)        →   R += 0.30
+#      • C  (Capital buffers axis)        →   C -= 0.20
+#
+#  Interpretation:
+#      • Liquidity or exposure suddenly worsens.
+#      • Risk parameters spike upward (higher internal stress).
+#      • Capital buffers fall (loss / de-leveraging event).
+#
+#  Model significance:
+#      – The stress moves Δ⃗ sharply away from equilibrium,
+#        pushing FXI from near-stable → stressed zone.
+#      – No discontinuities occur — FRE remains continuous.
+#      – The contraction mapping of the FRE operator pulls
+#        the system back toward equilibrium after the shock.
+#      – Demonstrates stability theorems under real disturbance.
+#
+#  Summary:
+#      This block defines the official “Stress Test 1”
+#      for FRE-Simulator V2.0. It serves as a baseline test
+#      for system resilience, contraction, and recovery.
+# ============================================================
 
-class NoShockScenario:
+
+class StressScenario:
     """
-    Trivial scenario: no external shocks, state is unchanged.
+    Stress scenario: single multi-component shock at t = 5.
 
     Engine calls:
         state = scenario.apply(state, t)
 
-    Здесь можно будет позже добавить сдвиги по компонентам,
-    чтобы моделировать stress-сценарии (ликвидность, маржа и т.д.).
+    Логика:
+      - t < 5  : система эволюционирует нормально
+      - t = 5  : резкий стресс по нескольким осям (L, R, C)
+      - t > 5  : дальше снова чистая динамика FRE, которая тянет систему к равновесию.
+
+    Это моделирует, например:
+      - внезапный отток ликвидности / рост экспозиций (L),
+      - усиление риск-параметров / волатильности (R),
+      - просадку капитальных буферов (C).
     """
 
+    def __init__(self) -> None:
+        self.stress_applied = False
+
     def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
-        # Пример того, как можно будет добавить стресс:
-        # if t == 5:
-        #     state.m += 0.2
-        #     state.L -= 0.1
-        #     state.compute_delta()
+        # Однократный стресс на шаге t = 5
+        if t == 5 and not self.stress_applied:
+            # Текущие значения к этому моменту уже почти около референса (≈1.0),
+            # поэтому мы создаём заметное отклонение:
+            #
+            #   L ↓  на 0.3  (лимиты / ликвидность ухудшаются)
+            #   R ↑  на 0.3  (риск-параметры ужесточаются / растут)
+            #   C ↓  на 0.2  (капитал проседает)
+            #
+            # Это даёт векторный стресс:
+            #   ΔL ≈ -0.3, ΔR ≈ +0.3, ΔC ≈ -0.2
+            # и поднимает FXI в "critical" зону — дальше FRE должен сам стянуть всё обратно.
+
+            state.L -= 0.3
+            state.R += 0.3
+            state.C -= 0.2
+
+            # Обновляем Δ⃗ и FXI после стресса
+            state.compute_delta()
+            state.validate()
+
+            self.stress_applied = True
+
         return state
 
 
@@ -279,7 +346,7 @@ def main() -> None:
     initial_state.validate()
 
     operator = SimpleContractiveOperator(k=0.4)
-    scenario = NoShockScenario()
+    scenario = StressScenario()
 
     horizon = 20
 
@@ -305,6 +372,20 @@ def main() -> None:
     print(header)
     print("-" * len(header))
 
+    # ---- Summary table (scalar FXI / Delta) ----
+    print("FRE 2.0 Example Simulation (5D)")
+    print("================================")
+    print(f"Horizon: {horizon} steps")
+    print(
+        f"Initial FXI: {result.fxi_series[0]:.4f}, "
+        f"Initial Delta: {result.delta_series[0]:.4f}"
+    )
+    print()
+
+    header = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
+    print(header)
+    print("-" * len(header))
+
     for t, (fxi, delta, kappa, zone) in enumerate(
         zip(
             result.fxi_series,
@@ -316,12 +397,29 @@ def main() -> None:
         kappa_str = f"{kappa:.4f}" if kappa is not None else "   n/a "
         print(f"{t:3d} | {fxi:8.4f} | {delta:8.4f} | {kappa_str:>8} | {zone}")
 
+    # ---- NEW: detailed 5D deviation components ----
+    print("\nDetailed 5D deviation components (Delta vector):")
+    header2 = (
+        f"{'t':>3} | {'d_m':>8} | {'d_L':>8} | "
+        f"{'d_H':>8} | {'d_R':>8} | {'d_C':>8} | {'norm':>8}"
+    )
+    print(header2)
+    print("-" * len(header2))
+
+    for t, state in enumerate(result.state_series):
+        # delta_vec = [Δm, ΔL, ΔH, ΔR, ΔC]
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+        norm_val = (d_m**2 + d_L**2 + d_H**2 + d_R**2 + d_C**2) ** 0.5
+        print(
+            f"{t:3d} | {d_m:8.4f} | {d_L:8.4f} | "
+            f"{d_H:8.4f} | {d_R:8.4f} | {d_C:8.4f} | {norm_val:8.4f}"
+        )
+
     print()
     print(f"Breach occurred: {result.breach_occurred}")
     if result.breach_occurred:
         print(f"  Step : {result.breach_step}")
         print(f"  Type : {result.breach_type}")
-
 
 if __name__ == "__main__":
     main()

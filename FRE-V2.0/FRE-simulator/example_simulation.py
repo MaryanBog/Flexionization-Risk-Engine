@@ -258,7 +258,6 @@ class SimpleContractiveOperator:
 #      for system resilience, contraction, and recovery.
 # ============================================================
 
-
 class StressScenario:
     """
     Stress scenario: single multi-component shock at t = 5.
@@ -306,6 +305,50 @@ class StressScenario:
 
         return state
 
+# NEW: Stress Test 2 — Dual-Shock Scenario (two shocks at t=5 and t=15)
+class DualShockScenario:
+    """
+    Stress Test 2: Dual-Shock Scenario.
+
+    Two shocks:
+      - t = 5  : margin + liquidity type stress (m, L, H, C)
+      - t = 15 : risk-parameters + capital stress (m, L, H, R, C)
+
+    The scenario keeps FRE continuous and lets the contraction
+    dynamics pull the system back to equilibrium after each shock.
+    """
+
+    def __init__(self) -> None:
+        self.first_shock_applied = False
+        self.second_shock_applied = False
+
+    def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
+        # Shock 1 at t = 5: margin + liquidity driven stress
+        if t == 5 and not self.first_shock_applied:
+            # Δm += 0.25, ΔL += 0.20, ΔH += 0.05, ΔC += -0.05
+            state.m += 0.25
+            state.L += 0.20
+            state.H += 0.05
+            state.C -= 0.05
+
+            state.compute_delta()
+            state.validate()
+            self.first_shock_applied = True
+
+        # Shock 2 at t = 15: risk-parameters + capital stress
+        if t == 15 and not self.second_shock_applied:
+            # Δm += 0.05, ΔL += 0.10, ΔH += 0.10, ΔR += 0.20, ΔC += -0.15
+            state.m += 0.05
+            state.L += 0.10
+            state.H += 0.10
+            state.R += 0.20
+            state.C -= 0.15
+
+            state.compute_delta()
+            state.validate()
+            self.second_shock_applied = True
+
+        return state
 
 # ---------------------------------------------------------
 # 4. Run example simulation
@@ -372,16 +415,6 @@ def main() -> None:
     print(header)
     print("-" * len(header))
 
-    # ---- Summary table (scalar FXI / Delta) ----
-    print("FRE 2.0 Example Simulation (5D)")
-    print("================================")
-    print(f"Horizon: {horizon} steps")
-    print(
-        f"Initial FXI: {result.fxi_series[0]:.4f}, "
-        f"Initial Delta: {result.delta_series[0]:.4f}"
-    )
-    print()
-
     header = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
     print(header)
     print("-" * len(header))
@@ -420,6 +453,91 @@ def main() -> None:
     if result.breach_occurred:
         print(f"  Step : {result.breach_step}")
         print(f"  Type : {result.breach_type}")
+
+    # -----------------------------------------------------
+    # Stress Test 2 — Dual-Shock Scenario
+    # -----------------------------------------------------
+    print("\n\nStress Test 2 — Dual-Shock Scenario (5D)")
+    print("=========================================")
+
+    # Initial state for Stress Test 2:
+    # near-equilibrium configuration with small deviations:
+    #   Δm = 0.03, ΔL = 0.02, ΔH = 0.00, ΔR = 0.00, ΔC = 0.01
+    initial_state_2 = ExampleState5D(
+        m=1.0 + 0.03,   # m_ref + Δm
+        L=1.0 + 0.02,   # L_ref + ΔL
+        H=1.0 + 0.00,
+        R=1.0 + 0.00,
+        C=1.0 + 0.01,
+        m_ref=1.0,
+        L_ref=1.0,
+        H_ref=1.0,
+        R_ref=1.0,
+        C_ref=1.0,
+        delta=0.0,
+        fxi=1.0,
+    )
+
+    initial_state_2.compute_delta()
+    initial_state_2.validate()
+
+    # We reuse the same contractive operator (k = 0.4)
+    scenario_2 = DualShockScenario()
+    horizon_2 = 30
+
+    result_2: SimulationResult = run_simulation(
+        initial_state=initial_state_2,
+        operator=operator,
+        scenario=scenario_2,
+        horizon=horizon_2,
+        config=None,
+    )
+
+    # ---- Scalar summary table (FXI, Delta, kappa, Zone) for Stress Test 2 ----
+    print(f"Horizon: {horizon_2} steps")
+    print(
+        f"Initial FXI: {result_2.fxi_series[0]:.4f}, "
+        f"Initial Delta: {result_2.delta_series[0]:.4f}"
+    )
+    print()
+
+    header_s2 = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
+    print(header_s2)
+    print("-" * len(header_s2))
+
+    for t, (fxi, delta, kappa, zone) in enumerate(
+        zip(
+            result_2.fxi_series,
+            result_2.delta_series,
+            result_2.kappa_series,
+            result_2.stability_zones,
+        )
+    ):
+        kappa_str = f"{kappa:.4f}" if kappa is not None else "   n/a "
+        print(f"{t:3d} | {fxi:8.4f} | {delta:8.4f} | {kappa_str:>8} | {zone}")
+
+    # ---- Detailed 5D deviation components for Stress Test 2 ----
+    print("\nDetailed 5D deviation components (Delta vector) — Stress Test 2:")
+    header_vec_2 = (
+        f"{'t':>3} | {'d_m':>8} | {'d_L':>8} | "
+        f"{'d_H':>8} | {'d_R':>8} | {'d_C':>8} | {'norm':>8}"
+    )
+    print(header_vec_2)
+    print("-" * len(header_vec_2))
+
+    for t, state in enumerate(result_2.state_series):
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+        norm_val = (d_m**2 + d_L**2 + d_H**2 + d_R**2 + d_C**2) ** 0.5
+        print(
+            f"{t:3d} | {d_m:8.4f} | {d_L:8.4f} | "
+            f"{d_H:8.4f} | {d_R:8.4f} | {d_C:8.4f} | {norm_val:8.4f}"
+        )
+
+    print()
+    print(f"Breach occurred (Stress Test 2): {result_2.breach_occurred}")
+    if result_2.breach_occurred:
+        print(f"  Step : {result_2.breach_step}")
+        print(f"  Type : {result_2.breach_type}")
 
 if __name__ == "__main__":
     main()

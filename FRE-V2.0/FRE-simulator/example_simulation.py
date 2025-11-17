@@ -719,6 +719,88 @@ class ResonanceScenario:
 
         return state
 
+# -----------------------------------------------------
+# Level 8 - Domain Shift Stress Scenario (5D)
+# -----------------------------------------------------
+
+class DomainShiftScenario:
+    """
+    Level 8: Domain Shift Stress (5D).
+
+    Суть:
+      - На шагах t = 15, 30, 45, 60 система НЕ получает прямой шок по X,
+        а внезапно меняет целевой reference-вектор R⃗_ref.
+      - Это имитирует смену домена / регуляторных требований / риск-политики:
+          • новые целевые margin / limits / hedging / risk / capital,
+          • фактическое X остаётся тем же,
+          • но Δ⃗ = X - R⃗_ref резко меняется.
+      - FRE должен:
+          • пережить скачок в Δ⃗ без разрыва траектории,
+          • перестроить contraction mapping по новому FXI,
+          • продолжить устойчивую сходимость к новому равновесию.
+    """
+
+    def __init__(self) -> None:
+        # Моменты смены reference-вектора
+        self.shift_times = (15, 30, 45, 60)
+
+        # Новый целевой reference для каждого шага (асимметричные смещения в 5D)
+        # Формат: (m_ref, L_ref, H_ref, R_ref, C_ref)
+        self.reference_patterns = {
+            15: (1.02, 0.98, 1.03, 1.01, 0.97),
+            30: (0.97, 1.05, 0.96, 1.02, 1.00),
+            45: (1.04, 0.96, 1.01, 1.03, 0.95),
+            60: (1.00, 1.00, 1.00, 1.00, 1.00),  # возврат к симметричному референсу
+        }
+
+        # Чтобы не применять одно и то же смещение дважды
+        self.applied_shifts: set[int] = set()
+
+    def _apply_reference_shift(
+        self,
+        state: ExampleState5D,
+        new_m_ref: float,
+        new_L_ref: float,
+        new_H_ref: float,
+        new_R_ref: float,
+        new_C_ref: float,
+    ) -> None:
+        """
+        Вспомогательная функция:
+
+          1) меняем reference-вектор R⃗_ref,
+          2) пересчитываем Δ⃗ = X - R⃗_ref и FXI,
+          3) валидируем состояние.
+
+        Фактическое X не меняется — меняются только цели.
+        """
+        state.m_ref = new_m_ref
+        state.L_ref = new_L_ref
+        state.H_ref = new_H_ref
+        state.R_ref = new_R_ref
+        state.C_ref = new_C_ref
+
+        # Новый Δ⃗ и FXI относительно обновлённого референса
+        state.compute_delta()
+        state.validate()
+
+    def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
+        # Если текущий шаг — момент смены reference-вектора
+        if t in self.shift_times and t not in self.applied_shifts:
+            new_refs = self.reference_patterns.get(t)
+            if new_refs is not None:
+                self._apply_reference_shift(
+                    state,
+                    new_m_ref=new_refs[0],
+                    new_L_ref=new_refs[1],
+                    new_H_ref=new_refs[2],
+                    new_R_ref=new_refs[3],
+                    new_C_ref=new_refs[4],
+                )
+                self.applied_shifts.add(t)
+
+        return state
+
 # ---------------------------------------------------------
 # Run example simulation
 # ---------------------------------------------------------
@@ -1240,6 +1322,89 @@ def main() -> None:
     if result_7.breach_occurred:
         print(f"  Step : {result_7.breach_step}")
         print(f"  Type : {result_7.breach_type}")
+
+    # -----------------------------------------------------
+    # Level 8 — Domain Shift Stress (5D)
+    # -----------------------------------------------------
+    print("\n\nLevel 8 — Domain Shift Stress (5D)")
+    print("====================================")
+    horizon_8 = 80
+
+    # Initial state for Level 8:
+    #   небольшие асимметрии + нормальная зона
+    initial_state_8 = ExampleState5D(
+        m=1.0 + 0.04,
+        L=1.0 - 0.02,
+        H=1.0 + 0.03,
+        R=1.0 - 0.01,
+        C=1.0 + 0.02,
+        m_ref=1.0,
+        L_ref=1.0,
+        H_ref=1.0,
+        R_ref=1.0,
+        C_ref=1.0,
+        delta=0.0,
+        fxi=1.0,
+    )
+
+    initial_state_8.compute_delta()
+    initial_state_8.validate()
+
+    scenario_8 = DomainShiftScenario()
+
+    result_8: SimulationResult = run_simulation(
+        initial_state=initial_state_8,
+        operator=operator,     # тот же SimpleContractiveOperator(k=0.4)
+        scenario=scenario_8,
+        horizon=horizon_8,
+        config=None,
+    )
+
+    # ---- Scalar FXI/Delta summary for Level 8 ----
+    print(f"Horizon: {horizon_8} steps")
+    print(
+        f"Initial FXI: {result_8.fxi_series[0]:.4f}, "
+        f"Initial Delta: {result_8.delta_series[0]:.4f}"
+    )
+    print()
+
+    header_8 = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
+    print(header_8)
+    print("-" * len(header_8))
+
+    for t, (fxi, delta, kappa, zone) in enumerate(
+        zip(
+            result_8.fxi_series,
+            result_8.delta_series,
+            result_8.kappa_series,
+            result_8.stability_zones,
+        )
+    ):
+        kappa_str = f"{kappa:.4f}" if kappa is not None else "   n/a   "
+        print(f"{t:3d} | {fxi:8.4f} | {delta:8.4f} | {kappa_str:>8} | {zone}")
+
+    # ---- Detailed 5D deviation components for Level 8 ----
+    print("\nDetailed 5D deviation components (Delta vector) — Level 8:")
+    header_vec_8 = (
+        f"{'t':>3} | {'d_m':>8} | {'d_L':>8} | "
+        f"{'d_H':>8} | {'d_R':>8} | {'d_C':>8} | {'norm':>8}"
+    )
+    print(header_vec_8)
+    print("-" * len(header_vec_8))
+
+    for t, state in enumerate(result_8.state_series):
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+        norm_val = (d_m**2 + d_L**2 + d_H**2 + d_R**2 + d_C**2) ** 0.5
+        print(
+            f"{t:3d} | {d_m:8.4f} | {d_L:8.4f} | "
+            f"{d_H:8.4f} | {d_R:8.4f} | {d_C:8.4f} | {norm_val:8.4f}"
+        )
+
+    print()
+    print(f"Breach occurred (Level 8): {result_8.breach_occurred}")
+    if result_8.breach_occurred:
+        print(f"  Step : {result_8.breach_step}")
+        print(f"  Type : {result_8.breach_type}")
 
 if __name__ == "__main__":
     main()

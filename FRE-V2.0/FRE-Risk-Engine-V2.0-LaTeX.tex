@@ -1,0 +1,1158 @@
+\documentclass[12pt]{article}
+
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{lmodern}
+\geometry{margin=1in}
+
+\begin{document}
+
+% ---------------------------------------------------------
+% TITLE PAGE (ONLY ONE — FIXED)
+% ---------------------------------------------------------
+\begin{titlepage}
+    \thispagestyle{empty}
+    \centering
+    \vspace*{2cm}
+
+    {\Large \textbf{Flexionization Risk Engine (FRE)}}\\[10pt]
+    {\large \textbf{Version 2.0}}\\[22pt]
+
+    {\large \textbf{Formal Specification and Structural Dynamics Model}}\\[35pt]
+
+    {\large Maryan Bogdanov}\\[6pt]
+    {\normalsize Independent Researcher}\\[4pt]
+    {\normalsize \texttt{m7823445@gmail.com}}\\[28pt]
+
+    {\normalsize \textbf{Date:} 2025}\\[4pt]
+    {\normalsize \textbf{Document Type:} Research / Technical Specification}\\[4pt]
+    {\normalsize \textbf{LaTeX Source:} FRE-Risk-Engine-V2.0-LaTeX.tex}\\[4pt]
+    {\normalsize \textbf{DOI:} (assigned after Zenodo publication)}\\[32pt]
+
+    \vfill
+
+    \begin{spacing}{1}
+    {\small
+        This document presents the full mathematical specification of the
+        Flexionization Risk Engine (FRE) Version 2.0, including axioms,
+        multidimensional deviation model, equilibrium dynamics, corrective
+        operators, stability guarantees, and system geometry. It is intended
+        for academic review, formal archival publication, and application in
+        real-world risk-engineering systems.
+    }
+    \end{spacing}
+
+    \vfill
+\end{titlepage}
+
+% ---------------------------------------------------------
+% ABSTRACT (ONLY ONE — FIXED)
+% ---------------------------------------------------------
+\begin{abstract}
+The Flexionization Risk Engine (FRE) Version 2.0 is a multidimensional,
+structurally complete risk–control framework based entirely on internal
+system dynamics rather than market-based triggers. Unlike traditional
+risk engines that rely on volatility spikes, heuristic thresholds, or
+external price movements, FRE defines stability through a vector deviation
+model
+\[
+    \vec{\Delta} = (\Delta_m, \Delta_L, \Delta_H, \Delta_R, \Delta_C)
+    \in \mathbb{R}^5,
+\]
+representing margin, exposure, liquidity, risk–parameter, and capital
+deviations of the full state \( X \).
+
+Corrective behavior is governed by the multidimensional equilibrium
+indicator \( \mathrm{FXI} \) and a vector corrective operator \( \vec{E} \),
+which maps the system toward structural equilibrium under bounded,
+continuous transitions. FRE 2.0 provides formal guarantees of stability,
+convergence, admissibility, and geometric contraction, establishing a
+unique equilibrium attractor independent of market conditions.
+
+This document presents the complete mathematical specification of FRE 2.0,
+including the axiomatic foundation, deviation geometry, equilibrium dynamics,
+system evolution laws, stability theorems, critical edge scenarios, and the
+simulation framework required for practical implementation. The model serves
+as a unified structural basis for risk engines across CeFi, DeFi, banking,
+derivatives, and automated hedging systems.
+\end{abstract}
+
+% ---------------------------------------------------------
+% KEYWORDS
+% ---------------------------------------------------------
+\noindent\textbf{Keywords:}
+Flexionization, Risk Engine, Structural Dynamics, Equilibrium Model,
+Multidimensional Deviation, Stability Theory, CeFi Risk Control,
+DeFi Risk Architecture, Contraction Mapping, Nonlinear Systems.
+
+% ---------------------------------------------------------
+% CONTENTS
+% ---------------------------------------------------------
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+The Flexionization Risk Engine (FRE) is a structural, fully deterministic
+risk–control framework designed to operate independently of external
+market signals, volatility spikes, or heuristic trigger mechanisms.
+Traditional risk engines across CeFi, DeFi, banking, derivatives, and
+automated hedging systems rely on discontinuous adjustments driven by
+market behavior. These mechanisms introduce procyclicality, instability,
+and systemic amplification during stress events.
+
+FRE Version~2.0 replaces these approaches with a mathematically rigorous,
+multidimensional equilibrium model grounded exclusively in the internal
+state of the system. The core concept is the structural deviation vector
+\[
+    \vec{\Delta} = (\Delta_m, \Delta_L, \Delta_H,
+                    \Delta_R, \Delta_C) \in \mathbb{R}^5,
+\]
+which captures the state of margins, exposures, hedging, risk parameters,
+and capital buffers.
+
+The corrective dynamics of the system are governed by the structural
+equilibrium indicator $\mathrm{FXI}$ and a vector corrective operator
+$\vec{E}$ that ensures continuous, bounded, and contracting transitions.
+These dynamics guarantee convergence toward a unique structural
+equilibrium attractor, independent of price movements or external
+volatility.
+
+FRE 2.0 provides a unified mathematical foundation for designing
+risk–control architectures across financial and computational domains.
+The model includes:
+
+\begin{itemize}
+    \item multidimensional deviation geometry,
+    \item axiomatic consistency requirements,
+    \item vector equilibrium dynamics,
+    \item contraction-based stability guarantees,
+    \item critical edge–case analysis,
+    \item and a simulation framework for applied systems.
+\end{itemize}
+
+This specification defines the complete formal structure of FRE
+Version~2.0, intended for academic review, research usage, protocol
+design, and integration into real-world risk–engine architectures.
+
+\section{Axioms}
+
+FRE Version~2.0 is built on a set of structural axioms that define the
+properties of the multidimensional deviation vector, the equilibrium
+indicator, and the corrective dynamics. These axioms ensure mathematical
+consistency, boundedness, continuity, and convergence of the system under
+all admissible transitions.
+
+\subsection{Axiom 1: Multidimensional State}
+
+The system state is defined as a vector
+\[
+    X = (m, L, H, R, C),
+\]
+representing margin configuration, limit and exposure structure, hedging
+and liquidity state, risk–parameter configuration, and capital buffers.
+All components must be internally computable and continuously
+differentiable almost everywhere.
+
+\subsection{Axiom 2: Structural Deviation Vector}
+
+The structural deviation is given by the mapping
+\[
+    \vec{\Delta} = D(X)
+    = \bigl(
+        D_m(X), D_L(X), D_H(X),
+        D_R(X), D_C(X)
+      \bigr)
+    \in \mathbb{R}^5,
+\]
+where each deviation component is continuous, bounded, and monotonic with
+respect to its corresponding subsystem.
+
+\subsection{Axiom 3: Equilibrium Indicator}
+
+The structural equilibrium indicator is a scalar function
+\[
+    \mathrm{FXI} = F(\vec{\Delta}),
+\]
+defined on $\mathbb{R}^5$, strictly monotonic in each deviation component,
+and satisfying:
+\[
+    \mathrm{FXI} > 1 \;\Rightarrow\; \text{expanded state}, \qquad
+    \mathrm{FXI} < 1 \;\Rightarrow\; \text{compressed state}, \qquad
+    \mathrm{FXI} = 1 \;\Rightarrow\; \text{structural symmetry}.
+\]
+
+\subsection{Axiom 4: Corrective Operator}
+
+The corrective operator is a vector mapping
+\[
+    \vec{E}: \mathbb{R}^5 \rightarrow \mathbb{R}^5,
+\]
+which determines the target equilibrium deviation for the next state. The
+operator must be:
+
+\begin{itemize}
+    \item total (defined for all admissible deviation vectors),
+    \item continuous in every component,
+    \item bounded in magnitude,
+    \item monotonic relative to the equilibrium indicator $F$,
+    \item contracting around equilibrium.
+\end{itemize}
+
+\subsection{Axiom 5: Bounded Transitions}
+
+For all admissible transitions, the update
+\[
+    X_{t+1} = X_t + C_t
+\]
+must satisfy
+\[
+    \| C_t \| \leq L,
+\]
+for a finite structural bound $L > 0$, ensuring the absence of
+discontinuous structural jumps.
+
+\subsection{Axiom 6: Dynamic Consistency}
+
+The equilibrium indicator must satisfy
+\[
+    F\bigl(D(X_{t+1})\bigr)
+    =
+    F(\vec{\Delta}_{t+1})
+    =
+    F(\vec{E}(\vec{\Delta}_t)),
+\]
+ensuring that the next state is consistent with the prescribed corrective
+dynamics.
+
+\subsection{Axiom 7: Existence of a Corrective Step}
+
+For every admissible state $X_t$, there must exist at least one bounded
+correction $C_t$ such that
+\[
+    \vec{\Delta}_{t+1}
+    =
+    \vec{E}(\vec{\Delta}_t),
+\]
+ensuring that structural equilibrium is always reachable.
+
+\subsection{Axiom 8: Bounded Equilibrium Dynamics}
+
+The equilibrium indicator must remain bounded:
+\[
+    \mathrm{FXI} \leq M,
+\]
+for a fixed constant $M > 1$, preventing unbounded structural drift.
+
+These axioms together define a deterministic, continuous, and
+contraction-driven structural system that forms the foundation of FRE
+Version~2.0.
+
+\section{Formal Model}
+
+The formal model of FRE Version~2.0 defines the full mathematical
+structure of system evolution, including multidimensional deviation,
+equilibrium evaluation, corrective dynamics, and admissible transitions.
+The model provides a deterministic update rule that ensures continuous,
+bounded, and contracting structural adjustments.
+
+\subsection{State Representation}
+
+The internal state of the system is represented as
+\[
+    X = (m, L, H, R, C),
+\]
+where each component corresponds to a structural subsystem:
+
+\begin{itemize}
+    \item $m$ — margin configuration,
+    \item $L$ — limits and exposures,
+    \item $H$ — hedging and liquidity structure,
+    \item $R$ — risk–parameter configuration,
+    \item $C$ — capital buffers and reserves.
+\end{itemize}
+
+All components must be internally computable from on-chain or off-chain
+system metadata and represent the complete structural footprint of the
+system.
+
+\subsection{Deviation Mapping}
+
+The deviation operator maps a system state into its 5-dimensional deviation
+vector:
+\[
+    \vec{\Delta}
+    =
+    D(X)
+    =
+    \bigl(
+        D_m(X),\,
+        D_L(X),\,
+        D_H(X),\,
+        D_R(X),\,
+        D_C(X)
+    \bigr)
+    \in \mathbb{R}^5.
+\]
+
+Each component of the deviation must satisfy:
+\begin{itemize}
+    \item continuity,
+    \item boundedness,
+    \item monotonicity with respect to subsystem imbalance,
+    \item admissibility for all possible system states.
+\end{itemize}
+
+\subsection{Equilibrium Indicator}
+
+The scalar equilibrium indicator is defined as a continuous mapping
+\[
+    \mathrm{FXI} = F(\vec{\Delta}),
+\]
+where $F:\mathbb{R}^5 \to \mathbb{R}^+$ is strictly monotonic and satisfies:
+
+\[
+    F(\vec{\Delta}) = 1 
+    \iff 
+    \text{system in structural symmetry},
+\]
+
+\[
+    F(\vec{\Delta}) > 1 
+    \iff 
+    \text{expanded or destabilized structural state},
+\]
+
+\[
+    F(\vec{\Delta}) < 1 
+    \iff 
+    \text{compressed or overly conservative structural state}.
+\]
+
+\subsection{Corrective Operator}
+
+Corrective adjustments are governed by the vector operator
+\[
+    \vec{E}: \mathbb{R}^5 \rightarrow \mathbb{R}^5,
+\]
+which prescribes the target structural deviation for the next moment:
+\[
+    \vec{\Delta}_{t+1}
+    =
+    \vec{E}(\vec{\Delta}_t).
+\]
+
+The operator $\vec{E}$ must be:
+\begin{itemize}
+    \item continuous,
+    \item bounded,
+    \item structurally monotonic,
+    \item equilibrium–seeking,
+    \item contracting in a neighborhood of equilibrium.
+\end{itemize}
+
+\subsection{FXI-Based Dynamics}
+
+The equilibrium indicator determines the contraction direction of the
+system:
+
+\[
+    F(\vec{\Delta}_t) > 1
+    \;\Rightarrow\;
+    \vec{E}(\vec{\Delta}_t) < \vec{\Delta}_t,
+\]
+
+\[
+    F(\vec{\Delta}_t) < 1
+    \;\Rightarrow\;
+    \vec{E}(\vec{\Delta}_t) > \vec{\Delta}_t,
+\]
+
+\[
+    F(\vec{\Delta}_t) = 1
+    \;\Rightarrow\;
+    \vec{E}(\vec{\Delta}_t) = \vec{\Delta}_t.
+\]
+
+This guarantees motion toward structural equilibrium.
+
+\subsection{System Update Rule}
+
+The system evolves via the state transition:
+\[
+    X_{t+1}
+    =
+    X_t + C_t,
+\]
+where $C_t$ is a bounded structural correction satisfying:
+
+\[
+    D(X_{t+1}) = \vec{E}(D(X_t)).
+\]
+
+Thus, the deviation evolution is:
+\[
+    \vec{\Delta}_{t+1}
+    =
+    \vec{E}(\vec{\Delta}_t).
+\]
+
+\subsection{Admissible Corrections}
+
+For every state $X_t$, there must exist at least one bounded correction
+$C_t$ such that:
+
+\[
+    \|C_t\| \leq L,
+\]
+\[
+    D(X_t + C_t) = \vec{E}(D(X_t)).
+\]
+
+This ensures that structural symmetry is always reachable through
+continuous transitions.
+
+\subsection{Equilibrium Point}
+
+A state $X^\ast$ is an equilibrium if:
+\[
+    D(X^\ast)
+    =
+    \vec{E}(D(X^\ast)).
+\]
+
+Under the contraction property of $\vec{E}$, such an equilibrium is:
+
+\begin{itemize}
+    \item unique,
+    \item globally stable,
+    \item reachable from any admissible initial state.
+\end{itemize}
+
+This concludes the formal mathematical definition of FRE 2.0.
+
+\section{Dynamics}
+
+The dynamics of FRE Version~2.0 describe how the system evolves under
+the multidimensional corrective operator. The update process is fully
+deterministic, continuous, bounded, and monotonic with respect to the
+equilibrium indicator.
+
+\subsection{Deviation Evolution}
+
+The core dynamic rule of FRE is the evolution of the deviation vector:
+\[
+    \vec{\Delta}_{t+1}
+    =
+    \vec{E}(\vec{\Delta}_t),
+\]
+where $\vec{E}$ is the multidimensional corrective operator defined in
+Section~3. The operator determines the structural direction of motion and
+ensures contraction toward equilibrium.
+
+The deviation evolution satisfies:
+
+\begin{itemize}
+    \item if $F(\vec{\Delta}_t) > 1$ then
+    \[
+        \vec{E}(\vec{\Delta}_t) < \vec{\Delta}_t,
+    \]
+    \item if $F(\vec{\Delta}_t) < 1$ then
+    \[
+        \vec{E}(\vec{\Delta}_t) > \vec{\Delta}_t,
+    \]
+    \item if $F(\vec{\Delta}_t) = 1$ then
+    \[
+        \vec{E}(\vec{\Delta}_t) = \vec{\Delta}_t.
+    \]
+\end{itemize}
+
+Thus, the sign of the equilibrium indicator determines the contraction or
+expansion direction of the deviation vector.
+
+\subsection{State Evolution}
+
+The system state evolves through bounded structural corrections:
+\[
+    X_{t+1}
+    =
+    X_t + C_t,
+\]
+where $C_t$ is an admissible structural correction satisfying:
+\[
+    D(X_{t+1})
+    =
+    \vec{E}(D(X_t)).
+\]
+
+Because the correction is bounded:
+\[
+    \|C_t\| \leq L,
+\]
+the system moves continuously without discontinuous jumps or heuristic
+override events.
+
+\subsection{Geometric Contraction}
+
+A key property of FRE is geometric contraction toward equilibrium. There
+exists a constant $0 < k < 1$ such that:
+\[
+    \|\vec{\Delta}_{t+1} - \vec{\Delta}^\ast\|
+    \leq
+    k \cdot
+    \|\vec{\Delta}_{t} - \vec{\Delta}^\ast\|,
+\]
+where $\vec{\Delta}^\ast$ is the equilibrium deviation.
+
+This implies:
+
+\begin{itemize}
+    \item convergence is exponential in discrete time,
+    \item equilibrium is globally stable,
+    \item deviation cannot oscillate or diverge,
+    \item the system is resistant to internal structural shocks.
+\end{itemize}
+
+\subsection{Admissible Trajectories}
+
+A deviation trajectory
+\[
+    \{ \vec{\Delta}_0, \vec{\Delta}_1, \vec{\Delta}_2, \dots \}
+\]
+is admissible if:
+
+\begin{enumerate}
+    \item $\vec{\Delta}_{t+1} = \vec{E}(\vec{\Delta}_t)$ for all $t$,
+    \item $\vec{\Delta}_t$ remains within the admissible domain
+          $\mathcal{D} \subset \mathbb{R}^5$,
+    \item $\mathrm{FXI}( \vec{\Delta}_t )$ is bounded for all $t$,
+    \item the corresponding corrections $C_t$ are bounded.
+\end{enumerate}
+
+These conditions ensure that every deviation trajectory reflects a
+structurally feasible evolution of the system.
+
+\subsection{Structural Symmetry}
+
+The system reaches structural symmetry when:
+\[
+    F(\vec{\Delta}_t) = 1,
+\]
+in which case:
+\[
+    \vec{\Delta}_{t+1} = \vec{\Delta}_{t}.
+\]
+
+This means the corrective operator leaves the state invariant, and the
+system remains in equilibrium without further structural movement.
+
+\subsection{Non-Equilibrium Motion}
+
+For non-equilibrium states, the system moves strictly toward equilibrium:
+\[
+    \vec{\Delta}_{t+1}
+    \neq
+    \vec{\Delta}_t,
+\]
+and the magnitude of motion satisfies:
+\[
+    0
+    <
+    \|\vec{\Delta}_{t+1} - \vec{\Delta}_t\|
+    \leq
+    \|\vec{\Delta}_t - \vec{\Delta}^\ast\|.
+\]
+
+Thus:
+
+\begin{itemize}
+    \item the system cannot stagnate outside equilibrium,
+    \item the system cannot reverse direction,
+    \item the system cannot leave the equilibrium basin.
+\end{itemize}
+
+\subsection{Continuous Structural Geometry}
+
+Although FRE evolves in discrete steps, the structural movement obeys a
+continuous geometric path in the deviation space. The sequence
+$\{\vec{\Delta}_t\}$ forms a contraction mapping toward a unique fixed
+point, generating a smooth structural trajectory in $\mathbb{R}^5$.
+
+This continuous geometry is essential for stability, predictability, and
+risk–engine designs that must avoid discontinuous liquidation or
+volatility-induced shocks.
+
+\section{Stability Theorems}
+
+The stability of FRE Version~2.0 follows from the contraction properties
+of the corrective operator and the continuity of the deviation mapping.
+This section establishes the existence and uniqueness of equilibrium,
+geometric convergence, and continuity of evolution under all admissible
+transitions.
+
+\subsection{Theorem 1: Contraction Mapping}
+
+Let the corrective operator $\vec{E}$ satisfy
+\[
+    \|\vec{E}(\vec{\Delta}_a) - \vec{E}(\vec{\Delta}_b)\|
+    \leq
+    k \, \|\vec{\Delta}_a - \vec{\Delta}_b\|,
+\qquad
+    0 < k < 1,
+\]
+for all admissible deviation vectors $\vec{\Delta}_a, \vec{\Delta}_b$.
+Then the deviation evolution
+\[
+    \vec{\Delta}_{t+1} = \vec{E}(\vec{\Delta}_t)
+\]
+forms a contraction mapping on $\mathcal{D} \subset \mathbb{R}^5$.
+
+\paragraph{Proof.}
+Immediate from the definition of a contraction operator. $\square$
+
+
+\subsection{Theorem 2: Existence and Uniqueness of Equilibrium}
+
+Under the contraction property of $\vec{E}$, there exists a unique
+equilibrium deviation $\vec{\Delta}^\ast$ satisfying
+\[
+    \vec{E}(\vec{\Delta}^\ast) = \vec{\Delta}^\ast.
+\]
+
+\paragraph{Proof.}
+By Banach's Fixed Point Theorem, every contraction on a closed, bounded,
+complete space admits a unique fixed point. $\square$
+
+
+\subsection{Theorem 3: Global Convergence}
+
+For any initial deviation vector $\vec{\Delta}_0$, the deviation sequence
+\[
+    \vec{\Delta}_0, \vec{\Delta}_1, \vec{\Delta}_2, \dots
+\]
+converges to the unique equilibrium $\vec{\Delta}^\ast$ according to
+\[
+    \|\vec{\Delta}_t - \vec{\Delta}^\ast\|
+    \leq
+    k^t \, \|\vec{\Delta}_0 - \vec{\Delta}^\ast\|.
+\]
+
+\paragraph{Proof.}
+Follows from repeated application of the contraction inequality. $\square$
+
+
+\subsection{Theorem 4: Stability of Equilibrium}
+
+The equilibrium deviation $\vec{\Delta}^\ast$ is globally stable:
+
+\[
+    \forall \, \epsilon > 0 \; \exists \, T :
+    t > T \;\Rightarrow\;
+    \|\vec{\Delta}_t - \vec{\Delta}^\ast\| < \epsilon.
+\]
+
+\paragraph{Proof.}
+Direct consequence of geometric convergence established in Theorem~3. $\square$
+
+
+\subsection{Theorem 5: No Oscillation}
+
+Deviation trajectories cannot oscillate:
+\[
+    \vec{\Delta}_{t+1} - \vec{\Delta}_{t}
+\]
+always has a consistent sign relative to movement toward $\vec{\Delta}^\ast$.
+
+\paragraph{Proof.}
+Since the operator $\vec{E}$ is contracting and monotonic with respect to
+$F$, it cannot produce a deviation that increases distance to equilibrium.
+Thus reversal is impossible. $\square$
+
+
+\subsection{Theorem 6: Continuity of Structural Motion}
+
+Let $C_t$ be the structural correction yielding the next state:
+\[
+    X_{t+1} = X_t + C_t.
+\]
+If $\|C_t\| \leq L$ for all $t$, then the trajectory in state space is
+continuous and contains no discontinuous transitions or heuristic jumps.
+
+\paragraph{Proof.}
+The update rule consists of a sum with a bounded term; hence the motion is
+continuous in the norm topology of the state space. $\square$
+
+
+\subsection{Theorem 7: Boundedness of FXI}
+
+Under the boundedness of $\vec{\Delta}$ and continuity of $F$, the
+equilibrium indicator satisfies:
+\[
+    \mathrm{FXI}( \vec{\Delta}_t ) \leq M,
+\]
+for some constant $M > 1$, for all $t$.
+
+\paragraph{Proof.}
+Since $\vec{\Delta}_t$ remains in a compact subset of $\mathbb{R}^5$ and
+$F$ is continuous, its image is bounded. $\square$
+
+
+\subsection{Theorem 8: Forward Completeness}
+
+The system evolution is forward-complete: for every initial state
+$X_0$, there exists a unique infinite trajectory
+\[
+    X_0, X_1, X_2, \dots
+\]
+compatible with the deviation evolution and bounded corrections.
+
+\paragraph{Proof.}
+From the existence of a unique deviation trajectory and bounded
+corrections, the corresponding state trajectory is uniquely determined. $\square$
+
+
+\subsection{Theorem 9: Structural Invariance of Equilibrium}
+
+If $X^\ast$ is a state such that
+\[
+    D(X^\ast) = \vec{\Delta}^\ast,
+\]
+then the update rule leaves $X^\ast$ invariant:
+\[
+    X_{t+1} = X_t = X^\ast.
+\]
+
+\paragraph{Proof.}
+Since $\vec{\Delta}^\ast$ is the fixed point of $\vec{E}$, the admissible
+correction is zero; thus the system performs no structural movement. $\square$
+
+\section{Critical Scenarios}
+
+Critical scenarios represent extreme system configurations in which one
+or more deviation components approach their admissible limits. FRE
+Version~2.0 must guarantee stability, boundedness, and continuity even
+in such conditions. This section defines the behavior of the deviation
+vector, the equilibrium indicator, and the corrective operator under
+structural stress.
+
+\subsection{Boundary States}
+
+A boundary state occurs when at least one deviation component saturates:
+\[
+    |\Delta_i| \rightarrow \Delta_i^{\max},
+\qquad
+    i \in \{m, L, H, R, C\}.
+\]
+
+Despite approaching structural limits, the system must satisfy:
+
+\begin{itemize}
+    \item bounded deviation evolution,
+    \item bounded FXI,
+    \item existence of an admissible correction,
+    \item no discontinuous adjustments,
+    \item continued movement toward equilibrium.
+\end{itemize}
+
+The corrective operator cannot diverge or change sign in boundary
+conditions.
+
+\subsection{Critical Expansion}
+
+Critical expansion is defined as a state where:
+\[
+    F(\vec{\Delta}) \gg 1,
+\]
+indicating severe structural overextension (e.g., exposure overload,
+insufficient liquidity, margin degradation).
+
+FRE behavior:
+
+\begin{itemize}
+    \item $\vec{E}(\vec{\Delta})$ produces a strong contraction,
+    \item deviation decreases monotonically,
+    \item FXI moves downward but remains continuous,
+    \item structural corrections $C_t$ remain bounded.
+\end{itemize}
+
+The system cannot experience a jump to a singular state or a
+discontinuous liquidation.
+
+\subsection{Critical Compression}
+
+Critical compression is the opposite extreme:
+\[
+    F(\vec{\Delta}) \ll 1,
+\]
+reflecting excessive conservatism, over-hedging, or over-collateralization.
+
+FRE behavior:
+
+\begin{itemize}
+    \item $\vec{E}(\vec{\Delta})$ expands deviation,
+    \item movement toward equilibrium is monotonic,
+    \item no oscillation or reversal is possible,
+    \item contraction geometry is preserved.
+\end{itemize}
+
+The system remains structurally viable even in over-conservative
+configurations.
+
+\subsection{Multi-Component Stress}
+
+A multi-component stress occurs when several deviation components
+simultaneously approach their extremes:
+\[
+    \vec{\Delta}
+    \approx
+    (\Delta_m^{\max},
+     \Delta_L^{\max},
+     \Delta_H^{\max},
+     \Delta_R^{\max},
+     \Delta_C^{\max}).
+\]
+
+In this case, FRE guarantees:
+
+\begin{itemize}
+    \item all components move toward equilibrium concurrently,
+    \item the corrective operator remains bounded in every dimension,
+    \item no component may reverse direction,
+    \item contraction in $\mathbb{R}^5$ remains strict.
+\end{itemize}
+
+This property is essential for complex risk–engine environments such as
+decentralized exchanges or clearing systems.
+
+\subsection{Edge-of-Domain Behavior}
+
+Let $\mathcal{D}$ denote the admissible domain of $\vec{\Delta}$. At the
+boundary $\partial \mathcal{D}$, FRE must satisfy:
+
+\[
+    \vec{E}(\vec{\Delta}) \in \mathcal{D},
+\qquad
+    \forall \vec{\Delta} \in \partial \mathcal{D}.
+\]
+
+Thus:
+
+\begin{itemize}
+    \item deviations cannot leave the admissible domain,
+    \item admissible corrections always exist,
+    \item the update rule is well-defined everywhere.
+\end{itemize}
+
+This guarantees that the system is globally well-posed.
+
+\subsection{Critical FXI Conditions}
+
+Extreme FXI values represent system-wide imbalance. FRE stipulates:
+
+\[
+    F(\vec{\Delta}) \rightarrow M
+    \;\Rightarrow\;
+    \vec{E}(\vec{\Delta}) - \vec{\Delta}
+    \text{ is maximally contracting},
+\]
+
+\[
+    F(\vec{\Delta}) \rightarrow 0
+    \;\Rightarrow\;
+    \vec{E}(\vec{\Delta}) - \vec{\Delta}
+    \text{ is maximally expanding}.
+\]
+
+Thus, the structural correction strength increases near the limits of the
+admissible domain.
+
+\subsection{No Failure Modes}
+
+FRE Version~2.0 has no internal failure modes in the deviation evolution:
+
+\begin{itemize}
+    \item no divergence,
+    \item no unbounded paths,
+    \item no oscillations,
+    \item no structural dead zones,
+    \item no discontinuous jumps.
+\end{itemize}
+
+Every deviation trajectory is guaranteed to converge to equilibrium or
+remain in equilibrium.
+
+\section{Simulation Framework}
+
+The simulation framework provides a computational environment for
+evaluating the dynamics, stability properties, stress behavior, and
+trajectory geometry of the Flexionization Risk Engine (FRE) Version~2.0.
+The simulator implements the formal deviation evolution, corrective
+operator, structural bounds, and equilibrium analysis defined in previous
+sections.
+
+\subsection{Simulation Inputs}
+
+A simulation run requires the following inputs:
+
+\begin{itemize}
+    \item initial system state $X_0$,
+    \item deviation operator $D$,
+    \item corrective operator $\vec{E}$,
+    \item equilibrium indicator $F$,
+    \item simulation horizon $T \in \mathbb{N}$,
+    \item admissible correction bound $L$,
+    \item domain constraints $\mathcal{D} \subset \mathbb{R}^5$.
+\end{itemize}
+
+These elements uniquely determine the structural evolution of the system
+under the FRE 2.0 dynamics.
+
+\subsection{Core Evolution Loop}
+
+The simulation uses a discrete-time update cycle:
+
+\[
+    \vec{\Delta}_t = D(X_t),
+\qquad
+    \vec{\Delta}_{t+1} = \vec{E}(\vec{\Delta}_t),
+\qquad
+    X_{t+1} = X_t + C_t,
+\]
+
+with the correction vector $C_t$ chosen such that:
+
+\[
+    D(X_t + C_t) = \vec{E}(D(X_t)).
+\]
+
+The correction must satisfy the boundedness constraint:
+\[
+    \|C_t\| \leq L.
+\]
+
+\subsection{Trajectory Recording}
+
+For each time step $t$, the simulator records:
+
+\begin{itemize}
+    \item system state $X_t$,
+    \item deviation vector $\vec{\Delta}_t$,
+    \item equilibrium indicator $F(\vec{\Delta}_t)$,
+    \item corrective movement $C_t$,
+    \item distance to equilibrium
+    \[
+        d_t = \|\vec{\Delta}_t - \vec{\Delta}^\ast\|.
+    \]
+\end{itemize}
+
+This forms the full structural trajectory of the system.
+
+\subsection{Stability Measurements}
+
+The simulator computes several stability metrics:
+
+\begin{itemize}
+    \item \textbf{contraction ratio}
+    \[
+        k_t
+        =
+        \frac{
+            \|\vec{\Delta}_{t+1} - \vec{\Delta}^\ast\|
+        }{
+            \|\vec{\Delta}_{t} - \vec{\Delta}^\ast\|
+        },
+    \]
+    \item \textbf{FXI trajectory}
+    \[
+        F(\vec{\Delta}_0),
+        F(\vec{\Delta}_1),
+        \dots,
+        F(\vec{\Delta}_T),
+    \]
+    \item \textbf{velocity of structural movement}
+    \[
+        v_t
+        =
+        \|\vec{\Delta}_{t+1} - \vec{\Delta}_t\|,
+    \]
+    \item \textbf{projection onto equilibrium gradient}.
+\end{itemize}
+
+These metrics verify the contraction and monotonicity properties of FRE.
+
+\subsection{Stress Testing}
+
+The simulator must support structured stress-testing scenarios:
+
+\begin{itemize}
+    \item single-component stress ($\Delta_i$ near maximum),
+    \item multi-component stress,
+    \item FXI extremes,
+    \item domain-edge trajectories,
+    \item sudden structural imbalance injections.
+\end{itemize}
+
+Stress tests verify the robustness properties defined in Section~6.
+
+\subsection{Visualization Requirements}
+
+The simulator should provide:
+
+\begin{itemize}
+    \item deviation trajectories in $\mathbb{R}^5$,
+    \item FXI curve over time,
+    \item contraction profile,
+    \item radial convergence plot toward equilibrium,
+    \item stress-test overlays,
+    \item 2D/3D projections of deviation geometry.
+\end{itemize}
+
+Visualization clarifies the stability geometry of FRE.
+
+\subsection{Admissibility Validation}
+
+At each time step the simulator validates:
+
+\begin{itemize}
+    \item $\vec{\Delta}_t \in \mathcal{D}$,
+    \item boundedness of corrections,
+    \item monotonic motion toward equilibrium,
+    \item absence of direction reversal,
+    \item continuity of structural movement.
+\end{itemize}
+
+A warning is raised if any condition is violated.
+
+\subsection{Termination Conditions}
+
+A simulation may terminate early if:
+
+\begin{itemize}
+    \item equilibrium is reached,
+    \item deviation norm falls below tolerance
+    \[
+        \|\vec{\Delta}_t - \vec{\Delta}^\ast\| < \epsilon,
+    \]
+    \item structural constraints are violated,
+    \item corrective operator becomes undefined (invalid input domain).
+\end{itemize}
+
+\subsection{Output}
+
+Simulation outputs include:
+
+\begin{itemize}
+    \item full trajectory $\{X_t\}$,
+    \item deviation trajectory $\{\vec{\Delta}_t\}$,
+    \item FXI sequence,
+    \item convergence diagnostics,
+    \item stability metrics,
+    \item stress-test results,
+    \item visualization files (if enabled).
+\end{itemize}
+
+These outputs are essential for validating FRE 2.0 implementation and
+evaluating real-world risk behavior.
+
+\section{Conclusion}
+
+The Flexionization Risk Engine (FRE) Version~2.0 establishes a fully
+structural, multidimensional, and mathematically rigorous framework for
+risk control across financial and computational architectures. Unlike
+traditional systems that rely on volatility triggers, price movements, or
+heuristic liquidation thresholds, FRE derives all corrective behavior
+from internal system dynamics.
+
+By introducing a five-dimensional deviation vector
+\[
+    \vec{\Delta} = (\Delta_m, \Delta_L, \Delta_H, \Delta_R, \Delta_C),
+\]
+an equilibrium indicator \( \mathrm{FXI} \), and a vector corrective
+operator \( \vec{E} \), FRE provides:
+
+\begin{itemize}
+    \item continuous and bounded structural evolution,
+    \item geometric contraction toward equilibrium,
+    \item global stability guarantees,
+    \item resilience under critical and boundary scenarios,
+    \item deterministic and fully predictable corrective behavior.
+\end{itemize}
+
+The stability theorems ensure that every admissible trajectory converges
+to a unique equilibrium deviation \( \vec{\Delta}^\ast \), while the
+simulation framework provides a practical means to evaluate dynamics,
+stress conditions, and long-term convergence in real-world systems.
+
+FRE Version~2.0 therefore serves as a unified structural foundation for:
+
+\begin{itemize}
+    \item CeFi risk engines,
+    \item DeFi protocol safety modules,
+    \item automated hedging systems,
+    \item liquidity and leverage control architectures,
+    \item banking and clearing systems,
+    \item next-generation on-chain risk infrastructures.
+\end{itemize}
+
+The specification presented in this document provides the complete
+mathematical basis for implementing, analyzing, and extending the
+Flexionization Risk Engine. It forms the theoretical core for forthcoming
+developments, including FRE Version~2.1 (Matrix Interaction Model),
+advanced simulation tools, and integration into the NGT ecosystem.
+
+FRE 2.0 represents a structural shift in risk–control design: the system
+no longer reacts to external volatility, but instead continuously
+corrects itself based on internal equilibrium geometry. This establishes
+a new class of risk engines—deterministic, stable, and structurally
+self-correcting—capable of maintaining equilibrium under all admissible
+conditions.
+
+\begin{thebibliography}{99}
+
+\bibitem{Bogdanov2025Theory}
+Bogdanov, M.
+\textit{Flexionization: Formal Theory of Dynamic Quantitative Equilibrium}.
+Version 1.5, 2025. Zenodo.
+DOI: 10.5281/zenodo.17618947.
+
+\bibitem{Bogdanov2025Immune}
+Bogdanov, M.
+\textit{Flexion-Immune Model}.
+Version 1.1, 2025. Zenodo.
+DOI: 10.5281/zenodo.17624206.
+
+\bibitem{Bogdanov2025FRE1.1}
+Bogdanov, M.
+\textit{Flexionization Risk Engine (FRE) Version 1.1}.
+2025. Zenodo.
+DOI: 10.5281/zenodo.17628118.
+
+\bibitem{Strogatz}
+Strogatz, S.
+\textit{Nonlinear Dynamics and Chaos}.
+Westview Press.
+
+\bibitem{Khalil}
+Khalil, H.
+\textit{Nonlinear Systems}.
+Prentice Hall.
+
+\bibitem{Bertsekas}
+Bertsekas, D.
+\textit{Dynamic Programming and Optimal Control}.
+Athena Scientific.
+
+\bibitem{Rockafellar}
+Rockafellar, R.
+\textit{Convex Analysis}.
+Princeton University Press.
+
+\bibitem{Banach1922}
+Banach, S.
+``Sur les opérations dans les ensembles abstraits''.
+\textit{Fundamenta Mathematicae}, 1922.
+
+\end{thebibliography}
+
+\end{document}

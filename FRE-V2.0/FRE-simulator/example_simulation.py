@@ -350,8 +350,68 @@ class DualShockScenario:
 
         return state
 
+# -----------------------------------------------------
+# Level 4 — Multi-Axis Asymmetric Stress Scenario
+# -----------------------------------------------------
+
+class MultiAxisAsymmetricScenario:
+    """
+    Level 4: Multi-Axis Asymmetric Stress.
+
+    Three asymmetric shocks across multiple internal axes:
+      - t = 7  : L, R, H, C shock (limits + risk + liquidity + capital)
+      - t = 18 : m, C, H, L, R shock (margin + capital + liquidity + limits + risk)
+      - t = 28 : H, L, R, C shock (liquidity restoration + limits compression)
+    """
+
+    def __init__(self) -> None:
+        self.shock_1_applied = False
+        self.shock_2_applied = False
+        self.shock_3_applied = False
+
+    def apply(self, state: ExampleState5D, t: int) -> ExampleState5D:
+        # Shock 1 at t = 7: limits and risk expand, liquidity and capital degrade
+        if t == 7 and not self.shock_1_applied:
+            # ΔL += 0.25, ΔR += 0.15, ΔH += 0.02, ΔC += -0.03
+            state.L += 0.25
+            state.R += 0.15
+            state.H += 0.02
+            state.C -= 0.03
+
+            state.compute_delta()
+            state.validate()
+            self.shock_1_applied = True
+
+        # Shock 2 at t = 18: strong margin and capital stress, with mixed effects
+        if t == 18 and not self.shock_2_applied:
+            # Δm += 0.30, ΔC += -0.20, ΔH += 0.04, ΔL += -0.05, ΔR += 0.10
+            state.m += 0.30
+            state.C -= 0.20
+            state.H += 0.04
+            state.L -= 0.05
+            state.R += 0.10
+
+            state.compute_delta()
+            state.validate()
+            self.shock_2_applied = True
+
+        # Shock 3 at t = 28: liquidity recovers, limits compress, capital stabilizes
+        if t == 28 and not self.shock_3_applied:
+            # ΔH += -0.20, ΔL += 0.18, ΔR += -0.05, ΔC += 0.10
+            state.H -= 0.20
+            state.L += 0.18
+            state.R -= 0.05
+            state.C += 0.10
+
+            state.compute_delta()
+            state.validate()
+            self.shock_3_applied = True
+
+        return state
+
+
 # ---------------------------------------------------------
-# 4. Run example simulation
+# Run example simulation
 # ---------------------------------------------------------
 
 
@@ -538,6 +598,90 @@ def main() -> None:
     if result_2.breach_occurred:
         print(f"  Step : {result_2.breach_step}")
         print(f"  Type : {result_2.breach_type}")
+
+
+    # -----------------------------------------------------
+    # Level 4 — Multi-Axis Asymmetric Stress (5D)
+    # -----------------------------------------------------
+    print("\n\nLevel 4 Multi-Axis Asymmetric Stress (5D)")
+    print("============================================")
+    horizon_4 = 40
+
+    # Initial state for Level 4:
+    #   Δm = +0.04, ΔL = -0.03, ΔH = +0.02, ΔR = 0.00, ΔC = -0.01
+    initial_state_4 = ExampleState5D(
+        m=1.0 + 0.04,   # m_ref + Δm
+        L=1.0 - 0.03,   # L_ref + ΔL
+        H=1.0 + 0.02,   # H_ref + ΔH
+        R=1.0 + 0.00,   # R_ref + ΔR
+        C=1.0 - 0.01,   # C_ref + ΔC
+        m_ref=1.0,
+        L_ref=1.0,
+        H_ref=1.0,
+        R_ref=1.0,
+        C_ref=1.0,
+        delta=0.0,
+        fxi=1.0,
+    )
+
+    initial_state_4.compute_delta()
+    initial_state_4.validate()
+
+    scenario_4 = MultiAxisAsymmetricScenario()
+
+    result_4: SimulationResult = run_simulation(
+        initial_state=initial_state_4,
+        operator=operator,      # same SimpleContractiveOperator(k=0.4)
+        scenario=scenario_4,
+        horizon=horizon_4,
+        config=None,
+    )
+
+    # ---- Scalar FXI/Delta summary for Level 4 ----
+    print(f"Horizon: {horizon_4} steps")
+    print(
+        f"Initial FXI: {result_4.fxi_series[0]:.4f}, "
+        f"Initial Delta: {result_4.delta_series[0]:.4f}"
+    )
+    print()
+
+    header_4 = f"{'t':>3} | {'FXI':>8} | {'Delta':>8} | {'kappa':>8} | Zone"
+    print(header_4)
+    print("-" * len(header_4))
+
+    for t, (fxi, delta, kappa, zone) in enumerate(
+        zip(
+            result_4.fxi_series,
+            result_4.delta_series,
+            result_4.kappa_series,
+            result_4.stability_zones,
+        )
+    ):
+        kappa_str = f"{kappa:.4f}" if kappa is not None else "   n/a  "
+        print(f"{t:3d} | {fxi:8.4f} | {delta:8.4f} | {kappa_str:>8} | {zone}")
+
+    # ---- 5D deviation vector for Level 4 ----
+    print("\nDetailed 5D deviation components (Delta vector) Level 4:")
+    header_vec_4 = (
+        f"{'t':>3} | {'d_m':>8} | {'d_L':>8} | "
+        f"{'d_H':>8} | {'d_R':>8} | {'d_C':>8} | {'norm':>8}"
+    )
+    print(header_vec_4)
+    print("-" * len(header_vec_4))
+
+    for t, state in enumerate(result_4.state_series):
+        d_m, d_L, d_H, d_R, d_C = state.delta_vec
+        norm_val = (d_m**2 + d_L**2 + d_H**2 + d_R**2 + d_C**2) ** 0.5
+        print(
+            f"{t:3d} | {d_m:8.4f} | {d_L:8.4f} | "
+            f"{d_H:8.4f} | {d_R:8.4f} | {d_C:8.4f} | {norm_val:8.4f}"
+        )
+
+    print()
+    print(f"Breach occurred (Level 4): {result_4.breach_occurred}")
+    if result_4.breach_occurred:
+        print(f"  Step : {result_4.breach_step}")
+        print(f"  Type : {result_4.breach_type}")
 
 if __name__ == "__main__":
     main()

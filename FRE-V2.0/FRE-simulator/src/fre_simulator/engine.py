@@ -9,6 +9,45 @@ from .state import State
 from .operators import BaseOperator
 from .scenarios import BaseScenario
 
+"""
+Engine Module — FRE Simulator V2.0
+==================================
+
+This module implements the **core evolution loop** of the Flexionization
+Risk Engine (FRE) Version 2.0.  
+It defines how the structural deviation Δ⃗ and equilibrium indicator FXI evolve
+step-by-step under the corrective operator E⃗ and optional scenario-based shocks.
+
+The FRE evolution loop follows the formal definition from the FRE 2.0
+mathematical specification:
+
+    1. Start with initial deviation Δ⃗₀ and FXI₀
+    2. Apply external scenario Sₜ         → Δ⃗'ₜ
+    3. Apply corrective operator E⃗       → Δ⃗ₜ₊₁
+    4. Compute updated FXI(Δ⃗ₜ₊₁)
+    5. Classify the current stability zone
+    6. Repeat until horizon H
+
+Core Guarantees (from FRE Specification):
+
+- **Determinism:** No randomness is allowed inside the engine.
+- **Continuity:** All transitions are continuous functions of the state.
+- **Boundedness:** Δ⃗ and FXI remain within the admissible domain ∂D.
+- **Contraction:** E⃗ ensures movement toward the equilibrium zone.
+- **Predictability:** Results are fully reproducible for all inputs.
+- **No liquidation heuristics:** No discontinuous rules or external triggers.
+
+The `Simulator` class defined here serves as the canonical execution environment
+used by:
+
+- the official FRE 2.0 example simulation,
+- the full Stress Test Suite (Levels 1–10),
+- automated validation tests,
+- research experiments,
+- integration prototypes (NGT, FCS, DeFi/CeFi models).
+
+This module contains no business logic — only pure structural dynamics.
+"""
 
 @dataclass
 class SimulationResult:

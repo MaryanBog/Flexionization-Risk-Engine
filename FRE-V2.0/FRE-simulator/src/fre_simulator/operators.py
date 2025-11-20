@@ -1,3 +1,41 @@
+"""
+Operators Module — FRE Simulator V2.0
+=====================================
+
+This module contains the corrective operators used by the FRE 2.0 simulation
+framework. A corrective operator E⃗ defines how the deviation Δ at time t
+evolves into Δ at time t+1 according to:
+
+    Δₜ₊₁ = E(Δₜ)
+
+The operator must satisfy the core FRE 2.0 structural conditions:
+
+1. Continuity:
+   E⃗ is continuous over all admissible deviations.
+
+2. Boundedness:
+   The magnitude of E⃗(Δₜ) always remains within the structural bounds
+   specified in the FRE 2.0 specification.
+
+3. Contractivity:
+   For any Δₜ outside the equilibrium zone, E⃗ moves the state toward
+   the equilibrium (FXI → 1, Δ → 0).
+
+4. Determinism:
+   No randomness, branching heuristics, or discontinuous logic are used.
+
+The DefaultOperator provided here implements the canonical FRE 2.0
+corrective rule and serves as the reference operator used in:
+
+- example simulations,
+- stress test suite,
+- validation tests,
+- baseline experiments.
+
+Additional operators may be defined as extensions, provided they follow
+the same structural constraints.
+"""
+
 # operators.py
 # Corrective operators for FRE Simulator V2.0
 # Implements FXI update rules, contractivity κ, and operator base class.

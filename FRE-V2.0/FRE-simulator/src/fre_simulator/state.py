@@ -1,3 +1,25 @@
+"""
+State Module — FRE Simulator V2.0
+=================================
+
+This module defines the internal structural state used throughout the
+Flexionization Risk Engine (FRE) Version 2.0 simulation framework.
+
+The State object represents the instantaneous structural deviation of the system
+and contains:
+
+- FXI:   Equilibrium indicator value at time t
+- Delta: Deviation magnitude (scalar or vector, depending on the operator)
+- Zone:  Stability zone classification for the current state
+- Step:  Discrete time index in the evolution trajectory
+
+The State object is intentionally minimal. It stores only the information
+required by the FRE evolution loop and corrective operator E⃗. All dynamics
+are implemented in `engine.py`.
+
+This module is fully deterministic and side-effect free.
+"""
+
 # state.py
 # Structural state representation for FRE Simulator V2.0
 # Implements: Δ(t), FXI(t), admissibility checks, and initial state creation.

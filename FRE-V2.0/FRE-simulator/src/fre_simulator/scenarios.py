@@ -1,3 +1,35 @@
+"""
+Scenarios Module — FRE Simulator V2.0
+=====================================
+
+This module defines the external structural scenarios used in the FRE 2.0
+simulation framework. A scenario represents external conditions or shocks
+applied to the deviation state Δ during the evolution loop.
+
+Core principles of FRE 2.0 scenarios:
+
+1. Deterministic Shocks:
+   All scenario transformations must be deterministic and reproducible.
+   No randomness is permitted unless explicitly defined in a controlled
+   stress-test (e.g., Level 10 stochastic drift).
+
+2. Structural Consistency:
+   A scenario may apply a shift to Δ or FXI, but it must *not* modify the
+   corrective operator E⃗ or the FRE dynamics themselves.
+
+3. Bounded Effects:
+   Scenario-induced deviations must respect the admissible domain ∂D defined
+   in the FRE 2.0 specification.
+
+4. Reproducible Stress Levels:
+   Each stress scenario corresponds to a formal level in the FRE 2.0
+   Stress Test Suite (Levels 1–10), allowing consistent validation and
+   regression testing.
+
+The EmptyScenario provided here applies **no** external shocks and is used for
+baseline simulations, including the reference example included with FRE 2.0.
+"""
+
 # scenarios.py
 # Scenario definitions for FRE Simulator V2.0
 # Implements deterministic and stochastic stress scenarios.

@@ -151,6 +151,63 @@ See the `LICENSE` file for details.
 
 ---
 
+---
+
+## Version 2.0 — Implementation Notes
+
+This section summarizes how the FRE Simulator V2.0 implements the
+structural dynamics defined in the official FRE 2.0 mathematical specification.
+
+### ✔ Deterministic Structural Evolution
+All transitions follow the formal rule:
+
+\[
+\Delta_{t+1} = E(\Delta_t)
+\]
+
+with optional scenario modification:
+
+\[
+\Delta'_t = S_t(\Delta_t)
+\]
+
+No randomness, branching, or heuristic overrides are used.
+
+### ✔ Corrective Operator E⃗
+The DefaultOperator implements the canonical contraction rule described in the
+specification.  
+All corrections are:
+- bounded,
+- continuous,
+- monotone,
+- equilibrium-seeking.
+
+### ✔ FXI & Stability Zones
+FXI is recomputed at each step and used to classify the state into:
+- critical,
+- stressed,
+- stable,
+- compressed zones.
+
+The definitions match those in the official FRE 2.0 Specification (PDF/MD).
+
+### ✔ Strict Admissibility
+All deviation updates remain inside the admissible domain ∂D.  
+Boundedness constraints follow the FRE 2.0 model exactly.
+
+### ✔ Stress Test Compatibility
+The simulator is fully compatible with the official Stress Test Suite
+(Levels 1–10) without any modifications to code or operators.
+
+### ✔ No Business Logic
+The simulator contains **only** structural dynamics.  
+No finance-specific, liquidation, margin-call, or risk heuristics exist in code.
+
+This ensures that FRE remains a **pure structural model** exactly as defined by
+the formal theory.
+
+---
+
 ## Author
 
 **Maryan Bogdanov**  
